@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
 const authAPI = axios.create({
   baseURL: `${API_BASE_URL}/auth`,
@@ -43,8 +43,21 @@ export const authService = {
 
   async validateToken(token) {
     // This would typically be a separate endpoint to validate the token
-    // For now, we'll simulate it
-    return Promise.resolve({ valid: true });
+    // For now, we'll decode the JWT to get user info
+    try {
+      // Simple JWT decode (not secure validation, just for demo)
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.exp * 1000 > Date.now()) {
+        return {
+          id: payload.userId,
+          email: payload.email,
+          firstName: payload.firstName || 'User'
+        };
+      }
+      throw new Error('Token expired');
+    } catch (error) {
+      throw new Error('Invalid token');
+    }
   },
 
   async enableTwoFactor(email, token) {
@@ -52,6 +65,42 @@ export const authService = {
       email,
       token
     });
+    return response.data;
+  },
+
+  // Passkey methods
+  async beginPasskeyRegistration(email) {
+    const response = await authAPI.post('/passkey/register/begin', {
+      email
+    });
+    return response.data;
+  },
+
+  async finishPasskeyRegistration(email, credential) {
+    const response = await authAPI.post('/passkey/register/finish', {
+      email,
+      credential
+    });
+    return response.data;
+  },
+
+  async beginPasskeyAuthentication(email = null) {
+    const response = await authAPI.post('/passkey/authenticate/begin', {
+      email
+    });
+    return response.data;
+  },
+
+  async finishPasskeyAuthentication(email, credential) {
+    const response = await authAPI.post('/passkey/authenticate/finish', {
+      email,
+      credential
+    });
+    return response.data;
+  },
+
+  async getUserPasskeys(email) {
+    const response = await authAPI.get(`/passkeys?email=${encodeURIComponent(email)}`);
     return response.data;
   }
 };

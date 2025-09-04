@@ -230,83 +230,81 @@ const LoginPage = () => {
         <Title>Secure Asset Portal</Title>
         
         {!requiresTwoFactor ? (
-          <>
-            <Form onSubmit={handleSubmit(onSubmit)}>
-              <FormGroup>
-                <Label htmlFor="email">Email Address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  className={errors.email ? 'error' : ''}
-                  {...register('email', {
-                    required: 'Email is required',
-                    pattern: {
-                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                      message: 'Invalid email address'
-                    }
-                  })}
-                />
-                {errors.email && <ErrorMessage>{errors.email.message}</ErrorMessage>}
-              </FormGroup>
+          <Form onSubmit={handleSubmit(onSubmit)}>
+            <FormGroup>
+              <Label htmlFor="email">Email Address</Label>
+              <Input
+                id="email"
+                type="email"
+                className={errors.email ? 'error' : ''}
+                {...register('email', {
+                  required: 'Email is required',
+                  pattern: {
+                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                    message: 'Invalid email address'
+                  }
+                })}
+              />
+              {errors.email && <ErrorMessage>{errors.email.message}</ErrorMessage>}
+            </FormGroup>
 
-              <FormGroup>
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  className={errors.password ? 'error' : ''}
-                  {...register('password', {
-                    required: 'Password is required'
-                  })}
-                />
-                {errors.password && <ErrorMessage>{errors.password.message}</ErrorMessage>}
-              </FormGroup>
+            <FormGroup>
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                className={errors.password ? 'error' : ''}
+                {...register('password', {
+                  required: 'Password is required'
+                })}
+              />
+              {errors.password && <ErrorMessage>{errors.password.message}</ErrorMessage>}
+            </FormGroup>
 
-              <Button type="submit" disabled={loading || passkeyLoading}>
-                {loading ? 'Signing In...' : 'Sign In'}
-              </Button>
-            </Form>
-            
-            {passkeySupported && (
+            <Button type="submit" disabled={loading || passkeyLoading}>
+              {loading ? 'Signing In...' : 'Sign In'}
+            </Button>
+          </Form>
+          
+          {passkeySupported && (
+            <div style={{
+              margin: '1rem 0',
+              textAlign: 'center',
+              position: 'relative'
+            }}>
               <div style={{
-                margin: '1rem 0',
-                textAlign: 'center',
-                position: 'relative'
+                borderTop: '1px solid #e5e7eb',
+                margin: '1rem 0'
               }}>
-                <div style={{
-                  borderTop: '1px solid #e5e7eb',
-                  margin: '1rem 0'
+                <span style={{
+                  background: 'white',
+                  padding: '0 1rem',
+                  color: '#6b7280',
+                  fontSize: '0.875rem',
+                  position: 'relative',
+                  top: '-0.6rem'
                 }}>
-                  <span style={{
-                    background: 'white',
-                    padding: '0 1rem',
-                    color: '#6b7280',
-                    fontSize: '0.875rem',
-                    position: 'relative',
-                    top: '-0.6rem'
-                  }}>
-                    or
-                  </span>
-                </div>
-                
-                <Button 
-                  type="button" 
-                  onClick={() => loginWithPasskey()}
-                  disabled={loading || passkeyLoading}
-                  style={{
-                    background: '#2563eb',
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem'
-                  }}
-                >
-                  {passkeyLoading ? 'Authenticating...' : '🔐 Sign in with Passkey'}
-                </Button>
+                  or
+                </span>
               </div>
-            )}
-          </>
+              
+              <Button 
+                type="button" 
+                onClick={() => loginWithPasskey()}
+                disabled={loading || passkeyLoading}
+                style={{
+                  background: '#2563eb',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                {passkeyLoading ? 'Authenticating...' : '🔐 Sign in with Passkey'}
+              </Button>
+            </div>
+          )}
         ) : (
           <div>
             <TwoFactorSection>

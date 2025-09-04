@@ -1,13 +1,27 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const { body, validationResult } = require('express-validator');
+const { 
+  generateRegistrationOptions, 
+  verifyRegistrationResponse, 
+  generateAuthenticationOptions, 
+  verifyAuthenticationResponse 
+} = require('@simplewebauthn/server');
+const { findUser, addUser, updateUser, addAuditLog, findPasskeys, addPasskey, updatePasskey } = require('../data/mockDatabase');
+const emailService = require('../services/emailService');
 const router = express.Router();
 
-// Mock user storage (replace with database in production)
-let users = [];
+// WebAuthn configuration
+const rpName = 'Secure Asset Portal';
+const rpID = process.env.NODE_ENV === 'production' 
+  ? process.env.WEBAUTHN_RP_ID || 'secure-asset-portal.com' 
+  : 'localhost';
+const origin = process.env.NODE_ENV === 'production'
+  ? process.env.FRONTEND_URL || 'https://secure-asset-portal.com'
+  : 'http://localhost:3001';
 
 // Validation middleware
 const validateRegistration = [
@@ -35,8 +49,17 @@ router.post('/register', validateRegistration, async (req, res) => {
 
     const { email, password, firstName, lastName } = req.body;
 
+    // Enhanced email validation
+    const emailValidation = await emailService.isValidEmail(email);
+    if (!emailValidation.valid) {
+      return res.status(400).json({
+        error: 'Invalid email address',
+        message: emailValidation.reason
+      });
+    }
+
     // Check if user already exists
-    const existingUser = users.find(user => user.email === email);
+    const existingUser = findUser({ email });
     if (existingUser) {
       return res.status(409).json({
         error: 'User already exists',
@@ -55,22 +78,34 @@ router.post('/register', validateRegistration, async (req, res) => {
     });
 
     // Create user
-    const user = {
-      id: Date.now().toString(),
+    const user = addUser({
       email,
       firstName,
       lastName,
       password: hashedPassword,
       twoFactorSecret: secret.base32,
       twoFactorEnabled: false,
-      createdAt: new Date().toISOString(),
       lastLogin: null
-    };
-
-    users.push(user);
+    });
 
     // Generate QR code for 2FA setup
     const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
+
+    // Send welcome email (don't wait for it to complete)
+    emailService.sendWelcomeEmail(user, false)
+      .then(result => {
+        if (result.success) {
+          console.log(`📧 Welcome email sent to ${user.email}`);
+          if (result.messageId !== 'console-log') {
+            console.log(`📧 Preview URL: ${result.previewUrl || 'Check Ethereal Email'}`);
+          }
+        } else {
+          console.warn(`⚠️  Failed to send welcome email to ${user.email}:`, result.error);
+        }
+      })
+      .catch(error => {
+        console.error(`❌ Welcome email error for ${user.email}:`, error);
+      });
 
     res.status(201).json({
       message: 'User registered successfully',
@@ -83,7 +118,8 @@ router.post('/register', validateRegistration, async (req, res) => {
       twoFactor: {
         secret: secret.base32,
         qrCode: qrCodeUrl
-      }
+      },
+      emailSent: true
     });
 
   } catch (error) {
@@ -109,7 +145,7 @@ router.post('/login', validateLogin, async (req, res) => {
     const { email, password, twoFactorToken } = req.body;
 
     // Find user
-    const user = users.find(u => u.email === email);
+    const user = findUser({ email });
     if (!user) {
       return res.status(401).json({
         error: 'Invalid credentials',
@@ -151,7 +187,15 @@ router.post('/login', validateLogin, async (req, res) => {
     }
 
     // Update last login
-    user.lastLogin = new Date().toISOString();
+    updateUser(user.id, { lastLogin: new Date().toISOString() });
+    
+    // Log successful login
+    addAuditLog({
+      userId: user.id,
+      action: 'login',
+      resourceType: 'user',
+      resourceId: user.id
+    });
 
     // Generate JWT
     const token = jwt.sign(
@@ -190,7 +234,7 @@ router.post('/enable-2fa', async (req, res) => {
   try {
     const { email, token } = req.body;
 
-    const user = users.find(u => u.email === email);
+    const user = findUser({ email });
     if (!user) {
       return res.status(404).json({
         error: 'User not found'
@@ -211,7 +255,19 @@ router.post('/enable-2fa', async (req, res) => {
       });
     }
 
-    user.twoFactorEnabled = true;
+    updateUser(user.id, { twoFactorEnabled: true });
+
+    // Send dedicated 2FA confirmation email
+    const updatedUser = findUser(user.id);
+    emailService.send2FAConfirmationEmail(updatedUser)
+      .then(result => {
+        if (result.success) {
+          console.log(`📧 2FA confirmation email sent to ${user.email}`);
+        }
+      })
+      .catch(error => {
+        console.error(`❌ 2FA confirmation email error:`, error);
+      });
 
     res.json({
       message: 'Two-factor authentication enabled successfully'
@@ -221,6 +277,304 @@ router.post('/enable-2fa', async (req, res) => {
     console.error('2FA enable error:', error);
     res.status(500).json({
       error: 'Failed to enable 2FA'
+    });
+  }
+});
+
+// Passkey Registration - Begin
+router.post('/passkey/register/begin', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = findUser({ email });
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found'
+      });
+    }
+
+    // Get existing passkeys for this user
+    const existingPasskeys = findPasskeys({ userId: user.id });
+
+    const options = await generateRegistrationOptions({
+      rpName,
+      rpID,
+      userName: user.email,
+      userID: new TextEncoder().encode(user.id),
+      userDisplayName: `${user.firstName} ${user.lastName}`,
+      // Exclude existing passkeys
+      excludeCredentials: existingPasskeys.map(passkey => ({
+        id: new Uint8Array(Buffer.from(passkey.credentialId, 'base64url')),
+        type: 'public-key',
+        transports: passkey.transports || ['internal', 'hybrid']
+      })),
+      authenticatorSelection: {
+        residentKey: 'preferred',
+        userVerification: 'preferred',
+        authenticatorAttachment: 'platform' // Prefer platform authenticators (TouchID, FaceID, Windows Hello)
+      },
+    });
+
+    // Store challenge temporarily (in production, use Redis or similar)
+    updateUser(user.id, { currentChallenge: options.challenge });
+
+    res.json(options);
+  } catch (error) {
+    console.error('Passkey registration begin error:', error);
+    res.status(500).json({
+      error: 'Failed to begin passkey registration'
+    });
+  }
+});
+
+// Passkey Registration - Finish
+router.post('/passkey/register/finish', async (req, res) => {
+  try {
+    const { email, credential } = req.body;
+
+    const user = findUser({ email });
+    if (!user || !user.currentChallenge) {
+      return res.status(400).json({
+        error: 'Invalid registration state'
+      });
+    }
+
+    const verification = await verifyRegistrationResponse({
+      response: credential,
+      expectedChallenge: user.currentChallenge,
+      expectedOrigin: origin,
+      expectedRPID: rpID,
+    });
+
+    if (!verification.verified) {
+      return res.status(400).json({
+        error: 'Passkey registration failed',
+        message: 'Could not verify passkey'
+      });
+    }
+
+    // Store the passkey
+    const passkey = addPasskey({
+      userId: user.id,
+      credentialId: Buffer.from(verification.registrationInfo.credentialID).toString('base64url'),
+      credentialPublicKey: Buffer.from(verification.registrationInfo.credentialPublicKey).toString('base64'),
+      counter: verification.registrationInfo.counter,
+      credentialDeviceType: verification.registrationInfo.credentialDeviceType,
+      credentialBackedUp: verification.registrationInfo.credentialBackedUp,
+      transports: credential.response.transports || ['internal', 'hybrid'],
+      name: `${user.firstName}'s ${verification.registrationInfo.credentialDeviceType === 'multiDevice' ? 'Security Key' : 'Device'}`,
+      lastUsed: new Date().toISOString()
+    });
+
+    // Clear challenge
+    updateUser(user.id, { currentChallenge: null });
+
+    // Log the registration
+    addAuditLog({
+      userId: user.id,
+      action: 'passkey_registered',
+      resourceType: 'user',
+      resourceId: user.id,
+      details: { passkeyId: passkey.id }
+    });
+
+    res.json({
+      message: 'Passkey registered successfully',
+      passkey: {
+        id: passkey.id,
+        name: passkey.name,
+        createdAt: passkey.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Passkey registration finish error:', error);
+    res.status(500).json({
+      error: 'Failed to complete passkey registration'
+    });
+  }
+});
+
+// Passkey Authentication - Begin
+router.post('/passkey/authenticate/begin', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // If email provided, find user's passkeys
+    let allowCredentials = [];
+    if (email) {
+      const user = findUser({ email });
+      if (user) {
+        const userPasskeys = findPasskeys({ userId: user.id });
+        allowCredentials = userPasskeys.map(passkey => ({
+          id: new Uint8Array(Buffer.from(passkey.credentialId, 'base64url')),
+          type: 'public-key',
+          transports: passkey.transports || ['internal', 'hybrid']
+        }));
+      }
+    }
+
+    const options = await generateAuthenticationOptions({
+      rpID,
+      allowCredentials,
+      userVerification: 'preferred',
+    });
+
+    // Store challenge temporarily - we'll use email as key if provided, otherwise store globally
+    const challengeKey = email || 'anonymous';
+    // In production, store this in Redis with expiration
+    req.app.locals.authChallenges = req.app.locals.authChallenges || {};
+    req.app.locals.authChallenges[challengeKey] = options.challenge;
+
+    res.json(options);
+  } catch (error) {
+    console.error('Passkey authentication begin error:', error);
+    res.status(500).json({
+      error: 'Failed to begin passkey authentication'
+    });
+  }
+});
+
+// Passkey Authentication - Finish
+router.post('/passkey/authenticate/finish', async (req, res) => {
+  try {
+    const { email, credential } = req.body;
+
+    // Get challenge
+    const challengeKey = email || 'anonymous';
+    const expectedChallenge = req.app.locals.authChallenges?.[challengeKey];
+    
+    if (!expectedChallenge) {
+      return res.status(400).json({
+        error: 'Invalid authentication state',
+        message: 'No challenge found'
+      });
+    }
+
+    // Find the passkey
+    const credentialId = Buffer.from(credential.rawId, 'base64url').toString('base64url');
+    const passkeys = findPasskeys({ credentialId });
+    const passkey = passkeys[0];
+
+    if (!passkey) {
+      return res.status(400).json({
+        error: 'Passkey not found'
+      });
+    }
+
+    const user = findUser(passkey.userId);
+    if (!user) {
+      return res.status(400).json({
+        error: 'User not found'
+      });
+    }
+
+    const verification = await verifyAuthenticationResponse({
+      response: credential,
+      expectedChallenge,
+      expectedOrigin: origin,
+      expectedRPID: rpID,
+      authenticator: {
+        credentialID: new Uint8Array(Buffer.from(passkey.credentialId, 'base64url')),
+        credentialPublicKey: new Uint8Array(Buffer.from(passkey.credentialPublicKey, 'base64')),
+        counter: passkey.counter,
+        transports: passkey.transports
+      },
+    });
+
+    if (!verification.verified) {
+      return res.status(401).json({
+        error: 'Passkey authentication failed'
+      });
+    }
+
+    // Update passkey counter and last used
+    updatePasskey(passkey.id, {
+      counter: verification.authenticationInfo.newCounter,
+      lastUsed: new Date().toISOString()
+    });
+
+    // Update user last login
+    updateUser(user.id, { lastLogin: new Date().toISOString() });
+
+    // Clear challenge
+    delete req.app.locals.authChallenges[challengeKey];
+
+    // Log successful login
+    addAuditLog({
+      userId: user.id,
+      action: 'passkey_login',
+      resourceType: 'user',
+      resourceId: user.id,
+      details: { passkeyId: passkey.id }
+    });
+
+    // Generate JWT
+    const token = jwt.sign(
+      { 
+        userId: user.id, 
+        email: user.email,
+        role: 'user',
+        authMethod: 'passkey'
+      },
+      process.env.JWT_SECRET || 'fallback-secret-key',
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      message: 'Passkey authentication successful',
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        twoFactorEnabled: user.twoFactorEnabled
+      }
+    });
+  } catch (error) {
+    console.error('Passkey authentication finish error:', error);
+    res.status(500).json({
+      error: 'Failed to complete passkey authentication'
+    });
+  }
+});
+
+// Get user's passkeys
+router.get('/passkeys', async (req, res) => {
+  try {
+    // In a real app, this would require authentication middleware
+    const { email } = req.query;
+    
+    if (!email) {
+      return res.status(400).json({
+        error: 'Email required'
+      });
+    }
+
+    const user = findUser({ email });
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found'
+      });
+    }
+
+    const passkeys = findPasskeys({ userId: user.id });
+    const safePasskeys = passkeys.map(passkey => ({
+      id: passkey.id,
+      name: passkey.name,
+      credentialDeviceType: passkey.credentialDeviceType,
+      credentialBackedUp: passkey.credentialBackedUp,
+      lastUsed: passkey.lastUsed,
+      createdAt: passkey.createdAt
+    }));
+
+    res.json({
+      passkeys: safePasskeys
+    });
+  } catch (error) {
+    console.error('Get passkeys error:', error);
+    res.status(500).json({
+      error: 'Failed to get passkeys'
     });
   }
 });

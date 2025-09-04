@@ -1,10 +1,8 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
+const { findAssets, addAsset, updateAsset, deleteAsset, addAuditLog } = require('../data/mockDatabase');
 const router = express.Router();
-
-// Mock asset storage (replace with database in production)
-let assets = [];
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
@@ -49,7 +47,7 @@ const validateAsset = [
 // Get all assets for authenticated user
 router.get('/', authenticateToken, (req, res) => {
   try {
-    const userAssets = assets.filter(asset => asset.userId === req.user.userId);
+    const userAssets = findAssets({ userId: req.user.userId });
     
     res.json({
       assets: userAssets,
@@ -68,9 +66,8 @@ router.get('/', authenticateToken, (req, res) => {
 // Get asset by ID
 router.get('/:id', authenticateToken, (req, res) => {
   try {
-    const asset = assets.find(a => 
-      a.id === req.params.id && a.userId === req.user.userId
-    );
+    const userAssets = findAssets({ userId: req.user.userId, id: req.params.id });
+    const asset = userAssets[0];
 
     if (!asset) {
       return res.status(404).json({
@@ -102,19 +99,23 @@ router.post('/', authenticateToken, validateAsset, (req, res) => {
 
     const { name, type, value, description, metadata } = req.body;
 
-    const asset = {
-      id: Date.now().toString(),
+    const asset = addAsset({
       userId: req.user.userId,
       name,
       type,
       value: parseFloat(value),
       description: description || '',
-      metadata: metadata || {},
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    assets.push(asset);
+      metadata: metadata || {}
+    });
+    
+    // Log asset creation
+    addAuditLog({
+      userId: req.user.userId,
+      action: 'create_asset',
+      resourceType: 'asset',
+      resourceId: asset.id,
+      newValues: { name, type, value }
+    });
 
     res.status(201).json({
       message: 'Asset created successfully',
@@ -141,11 +142,10 @@ router.put('/:id', authenticateToken, validateAsset, (req, res) => {
       });
     }
 
-    const assetIndex = assets.findIndex(a => 
-      a.id === req.params.id && a.userId === req.user.userId
-    );
+    const userAssets = findAssets({ userId: req.user.userId, id: req.params.id });
+    const existingAsset = userAssets[0];
 
-    if (assetIndex === -1) {
+    if (!existingAsset) {
       return res.status(404).json({
         error: 'Asset not found',
         message: 'The requested asset does not exist'
@@ -153,20 +153,28 @@ router.put('/:id', authenticateToken, validateAsset, (req, res) => {
     }
 
     const { name, type, value, description, metadata } = req.body;
-
-    assets[assetIndex] = {
-      ...assets[assetIndex],
+    
+    const updatedAsset = updateAsset(req.params.id, {
       name,
       type,
       value: parseFloat(value),
       description: description || '',
-      metadata: metadata || {},
-      updatedAt: new Date().toISOString()
-    };
+      metadata: metadata || {}
+    });
+    
+    // Log asset update
+    addAuditLog({
+      userId: req.user.userId,
+      action: 'update_asset',
+      resourceType: 'asset',
+      resourceId: req.params.id,
+      oldValues: { name: existingAsset.name, type: existingAsset.type, value: existingAsset.value },
+      newValues: { name, type, value }
+    });
 
     res.json({
       message: 'Asset updated successfully',
-      asset: assets[assetIndex]
+      asset: updatedAsset
     });
 
   } catch (error) {
@@ -181,18 +189,26 @@ router.put('/:id', authenticateToken, validateAsset, (req, res) => {
 // Delete asset
 router.delete('/:id', authenticateToken, (req, res) => {
   try {
-    const assetIndex = assets.findIndex(a => 
-      a.id === req.params.id && a.userId === req.user.userId
-    );
+    const userAssets = findAssets({ userId: req.user.userId, id: req.params.id });
+    const asset = userAssets[0];
 
-    if (assetIndex === -1) {
+    if (!asset) {
       return res.status(404).json({
         error: 'Asset not found',
         message: 'The requested asset does not exist'
       });
     }
 
-    assets.splice(assetIndex, 1);
+    deleteAsset(req.params.id);
+    
+    // Log asset deletion
+    addAuditLog({
+      userId: req.user.userId,
+      action: 'delete_asset',
+      resourceType: 'asset',
+      resourceId: req.params.id,
+      oldValues: { name: asset.name, type: asset.type, value: asset.value }
+    });
 
     res.json({
       message: 'Asset deleted successfully'
@@ -210,9 +226,7 @@ router.delete('/:id', authenticateToken, (req, res) => {
 // Get assets by type
 router.get('/type/:type', authenticateToken, (req, res) => {
   try {
-    const userAssets = assets.filter(asset => 
-      asset.userId === req.user.userId && asset.type === req.params.type
-    );
+    const userAssets = findAssets({ userId: req.user.userId, type: req.params.type });
     
     res.json({
       assets: userAssets,

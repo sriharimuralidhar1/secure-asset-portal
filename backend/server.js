@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: '../.env' });
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -6,6 +6,9 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Trust proxy for rate limiting when behind reverse proxy
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet({
@@ -66,6 +69,33 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version || '1.0.0'
   });
+});
+
+// Debug endpoint to view current database state (development only)
+app.get('/debug', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  
+  const { mockDatabase } = require('./data/mockDatabase');
+  
+  const debugData = {
+    users: mockDatabase.users.map(user => ({
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      passwordHash: user.password.substring(0, 20) + '...',
+      twoFactorEnabled: user.twoFactorEnabled,
+      twoFactorSecret: user.twoFactorSecret ? user.twoFactorSecret.substring(0, 10) + '...' : null,
+      createdAt: user.createdAt,
+      lastLogin: user.lastLogin
+    })),
+    assets: mockDatabase.assets,
+    auditLogs: mockDatabase.auditLogs.slice(-10) // Last 10 entries
+  };
+  
+  res.json(debugData);
 });
 
 // 404 handler
