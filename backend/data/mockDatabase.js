@@ -1,15 +1,39 @@
 // Mock database storage
 // In production, this would be replaced with actual database models
 
+// BRAVE CLEAN TEST - All data wiped
 const mockDatabase = {
-  users: [],
+  users: [], // Empty slate for Brave testing
   assets: [],
   auditLogs: [],
-  passkeys: [] // Store passkey credentials
+  passkeys: [] // Fresh for passkey testing
+};
+
+// Clear everything on startup
+console.log('🗑️ BRAVE CLEAN TEST: Fresh database ready for passkey testing');
+
+// Clear database function for testing
+const clearDatabase = () => {
+  mockDatabase.users = [];
+  mockDatabase.assets = [];
+  mockDatabase.auditLogs = [];
+  mockDatabase.passkeys = [];
+  console.log('🗑️ Database cleared');
 };
 
 // Helper functions for data management
 const generateId = () => Date.now().toString();
+
+// Debug function to list all users
+const getAllUsers = () => {
+  return mockDatabase.users.map(user => ({
+    id: user.id,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    createdAt: user.createdAt
+  }));
+};
 
 const findUser = (criteria) => {
   if (typeof criteria === 'string') {
@@ -17,7 +41,25 @@ const findUser = (criteria) => {
   }
   
   if (criteria.email) {
-    return mockDatabase.users.find(user => user.email === criteria.email);
+    console.log('🔍 Looking for user with email:', criteria.email);
+    console.log('📋 Available users:', mockDatabase.users.map(u => u.email));
+    
+    // Try exact match first
+    let user = mockDatabase.users.find(u => u.email === criteria.email);
+    
+    // If no exact match, try case-insensitive
+    if (!user) {
+      user = mockDatabase.users.find(u => u.email.toLowerCase() === criteria.email.toLowerCase());
+    }
+    
+    // If still no match, try without dots (common email variation)
+    if (!user) {
+      const searchEmailNoDots = criteria.email.replace(/\./g, '');
+      user = mockDatabase.users.find(u => u.email.replace(/\./g, '') === searchEmailNoDots);
+    }
+    
+    console.log('👤 User found:', user ? `Yes (${user.email})` : 'No');
+    return user;
   }
   
   return null;
@@ -175,11 +217,15 @@ module.exports = {
   // Direct access to data (for debugging)
   mockDatabase,
   
+  // Database management
+  clearDatabase,
+  
   // User operations
   findUser,
   addUser,
   updateUser,
   deleteUser,
+  getAllUsers,
   
   // Asset operations
   findAssets,

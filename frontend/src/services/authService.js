@@ -100,7 +100,7 @@ export const authService = {
   },
 
   async getUserPasskeys(email) {
-    const response = await authAPI.get(`/passkeys?email=${encodeURIComponent(email)}`);
+    const response = await authAPI.get(`/passkeys/${encodeURIComponent(email)}`);
     return response.data;
   }
 };

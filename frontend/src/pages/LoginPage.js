@@ -4,10 +4,6 @@ import { useForm } from 'react-hook-form';
 import styled from 'styled-components';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { 
-  startAuthentication,
-  browserSupportsWebAuthn 
-} from '@simplewebauthn/browser';
 
 const LoginContainer = styled.div`
   min-height: 100vh;
@@ -127,15 +123,8 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
-  const [passkeyLoading, setPasskeyLoading] = useState(false);
-  const [passkeySupported, setPasskeySupported] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
-  
-  // Check passkey support when component mounts
-  React.useEffect(() => {
-    setPasskeySupported(browserSupportsWebAuthn());
-  }, []);
   
   const { register, handleSubmit, formState: { errors }, reset } = useForm();
 
@@ -183,46 +172,6 @@ const LoginPage = () => {
     setLoginEmail('');
     reset();
   };
-  
-  const loginWithPasskey = async (email = null) => {
-    if (!passkeySupported) {
-      toast.error('Passkeys are not supported in this browser');
-      return;
-    }
-    
-    setPasskeyLoading(true);
-    
-    try {
-      const { authService } = await import('../services/authService');
-      
-      // Start passkey authentication
-      const options = await authService.beginPasskeyAuthentication(email);
-      
-      // Authenticate with passkey
-      const credential = await startAuthentication(options);
-      
-      // Complete passkey authentication
-      const result = await authService.finishPasskeyAuthentication(email, credential);
-      
-      // Login successful
-      if (result.token) {
-        localStorage.setItem('token', result.token);
-        toast.success('Login successful!');
-        navigate('/dashboard');
-      }
-    } catch (error) {
-      console.error('Passkey authentication error:', error);
-      if (error.name === 'NotAllowedError') {
-        toast.error('Passkey authentication was cancelled or failed. Please try again.');
-      } else if (error.name === 'NotSupportedError') {
-        toast.error('This device does not support passkeys.');
-      } else {
-        toast.error(error.response?.data?.message || 'Failed to authenticate with passkey.');
-      }
-    } finally {
-      setPasskeyLoading(false);
-    }
-  };
 
   return (
     <LoginContainer>
@@ -262,50 +211,50 @@ const LoginPage = () => {
                 {errors.password && <ErrorMessage>{errors.password.message}</ErrorMessage>}
               </FormGroup>
 
-              <Button type="submit" disabled={loading || passkeyLoading}>
+              <Button type="submit" disabled={loading}>
                 {loading ? 'Signing In...' : 'Sign In'}
               </Button>
             </Form>
             
-            {passkeySupported && (
+            <div style={{
+              margin: '1rem 0',
+              textAlign: 'center',
+              position: 'relative'
+            }}>
               <div style={{
-                margin: '1rem 0',
-                textAlign: 'center',
-                position: 'relative'
+                borderTop: '1px solid #e5e7eb',
+                margin: '1rem 0'
               }}>
-                <div style={{
-                  borderTop: '1px solid #e5e7eb',
-                  margin: '1rem 0'
+                <span style={{
+                  background: 'white',
+                  padding: '0 1rem',
+                  color: '#6b7280',
+                  fontSize: '0.875rem',
+                  position: 'relative',
+                  top: '-0.6rem'
                 }}>
-                  <span style={{
-                    background: 'white',
-                    padding: '0 1rem',
-                    color: '#6b7280',
-                    fontSize: '0.875rem',
-                    position: 'relative',
-                    top: '-0.6rem'
-                  }}>
-                    or
-                  </span>
-                </div>
-                
-                <Button 
-                  type="button" 
-                  onClick={() => loginWithPasskey()}
-                  disabled={loading || passkeyLoading}
-                  style={{
-                    background: '#2563eb',
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem'
-                  }}
-                >
-                  {passkeyLoading ? 'Authenticating...' : '🔐 Sign in with Passkey'}
-                </Button>
+                  or
+                </span>
               </div>
-            )}
+              
+              <Button 
+                type="button" 
+                onClick={() => {
+                  navigate('/login/passkey');
+                }}
+                disabled={loading}
+                style={{
+                  background: '#2563eb',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                🔐 Sign in with Passkey
+              </Button>
+            </div>
           </>
         ) : (
           <div>
@@ -356,46 +305,6 @@ const LoginPage = () => {
                   Back to Login
                 </Button>
               </Form>
-              
-              {passkeySupported && (
-                <div style={{
-                  margin: '1rem 0',
-                  textAlign: 'center',
-                  position: 'relative'
-                }}>
-                  <div style={{
-                    borderTop: '1px solid #e5e7eb',
-                    margin: '1rem 0'
-                  }}>
-                    <span style={{
-                      background: '#f8fafc',
-                      padding: '0 1rem',
-                      color: '#6b7280',
-                      fontSize: '0.875rem',
-                      position: 'relative',
-                      top: '-0.6rem'
-                    }}>
-                      or use passkey instead
-                    </span>
-                  </div>
-                  
-                  <Button 
-                    type="button" 
-                    onClick={() => loginWithPasskey(loginEmail)}
-                    disabled={loading || passkeyLoading}
-                    style={{
-                      background: '#2563eb',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.5rem'
-                    }}
-                  >
-                    {passkeyLoading ? 'Authenticating...' : '🔐 Use Passkey Instead'}
-                  </Button>
-                </div>
-              )}
             </TwoFactorSection>
           </div>
         )}

@@ -184,6 +184,7 @@ const RegisterPage = () => {
     setLoading(true);
     
     try {
+      console.log('🔍 Registering user with email:', data.email);
       const result = await registerUser({
         email: data.email,
         password: data.password,
@@ -191,7 +192,11 @@ const RegisterPage = () => {
         lastName: data.lastName
       });
       
-      setUserEmail(data.email);
+      // Use the email from the server response to ensure exact match
+      const serverEmail = result.user?.email || data.email;
+      console.log('🔍 Server returned user email:', serverEmail);
+      console.log('🔍 Setting userEmail state to:', serverEmail);
+      setUserEmail(serverEmail);
       setTwoFactorData(result.twoFactor);
       setShowTwoFactor(true);
       if (result.emailSent) {
@@ -230,11 +235,19 @@ const RegisterPage = () => {
       return;
     }
     
+    console.log('🔍 Setting up passkey for email:', userEmail);
+    
+    if (!userEmail) {
+      toast.error('Email not found. Please try registering again.');
+      return;
+    }
+    
     setPasskeyLoading(true);
     
     try {
       const { authService } = await import('../services/authService');
       
+      console.log('🔍 About to call beginPasskeyRegistration with:', userEmail);
       // Start passkey registration
       const options = await authService.beginPasskeyRegistration(userEmail);
       
@@ -248,12 +261,22 @@ const RegisterPage = () => {
       navigate('/login');
     } catch (error) {
       console.error('Passkey registration error:', error);
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Full error:', error);
+      
       if (error.name === 'NotAllowedError') {
-        toast.error('Passkey registration was cancelled or failed. Please try again.');
+        toast.error('Passkey registration was cancelled. Please try again and approve the TouchID/FaceID prompt.');
       } else if (error.name === 'NotSupportedError') {
         toast.error('This device does not support passkeys.');
+      } else if (error.name === 'InvalidStateError') {
+        toast.error('A passkey for this account may already exist. Please try logging in instead.');
+      } else if (error.name === 'SecurityError') {
+        toast.error('Security error: Please make sure you are on HTTPS or localhost.');
+      } else if (error.response?.data?.message) {
+        toast.error(error.response.data.message);
       } else {
-        toast.error(error.response?.data?.message || 'Failed to register passkey. Please try again.');
+        toast.error(`Passkey error: ${error.message || 'Unknown error'}`);
       }
     } finally {
       setPasskeyLoading(false);
