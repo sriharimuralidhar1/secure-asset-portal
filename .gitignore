@@ -118,3 +118,6 @@ yarn.lock
 # Production build files
 frontend/build/
 backend/dist/
+
+# Local development files folder
+copy-this-folder-toLocal/

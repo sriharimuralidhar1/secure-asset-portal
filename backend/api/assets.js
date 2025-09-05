@@ -16,7 +16,16 @@ const authenticateToken = (req, res, next) => {
     });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key', (err, user) => {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    console.error('JWT_SECRET not configured');
+    return res.status(500).json({
+      error: 'Server configuration error',
+      message: 'Authentication service not properly configured'
+    });
+  }
+
+  jwt.verify(token, jwtSecret, (err, user) => {
     if (err) {
       return res.status(403).json({
         error: 'Invalid token',

@@ -209,16 +209,30 @@ router.post('/login', validateLogin, async (req, res) => {
     });
 
     // Generate JWT
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('❌ JWT_SECRET not configured');
+      return res.status(500).json({
+        error: 'Configuration error',
+        message: 'Authentication service not properly configured'
+      });
+    }
+
     const token = jwt.sign(
       { 
         userId: user.id, 
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        role: 'user'
+        role: 'user',
+        iat: Math.floor(Date.now() / 1000)
       },
-      process.env.JWT_SECRET || 'fallback-secret-key',
-      { expiresIn: '24h' }
+      jwtSecret,
+      { 
+        expiresIn: '24h',
+        issuer: 'secure-asset-portal',
+        audience: 'secure-asset-portal-client'
+      }
     );
 
     res.json({
@@ -766,8 +780,10 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
     const newCounter = authResult.authnrData.get('counter');
     
     // Update passkey counter and last used
+    // Ensure counter always increases to prevent rollback detection
+    const updatedCounter = Math.max(newCounter || 0, (passkey.counter || 0) + 1);
     updatePasskey(passkey.id, {
-      counter: newCounter || (passkey.counter + 1),
+      counter: updatedCounter,
       lastUsed: new Date().toISOString()
     });
 
@@ -787,6 +803,15 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
     });
 
     // Generate JWT
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('❌ JWT_SECRET not configured');
+      return res.status(500).json({
+        error: 'Configuration error',
+        message: 'Authentication service not properly configured'
+      });
+    }
+
     const token = jwt.sign(
       { 
         userId: user.id, 
@@ -794,10 +819,15 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         role: 'user',
-        authMethod: 'passkey'
+        authMethod: 'passkey',
+        iat: Math.floor(Date.now() / 1000)
       },
-      process.env.JWT_SECRET || 'fallback-secret-key',
-      { expiresIn: '24h' }
+      jwtSecret,
+      { 
+        expiresIn: '24h',
+        issuer: 'secure-asset-portal',
+        audience: 'secure-asset-portal-client'
+      }
     );
 
     console.log('✅ Passkey authentication successful for user:', user.email);
