@@ -93,6 +93,10 @@ const updateUser = async (userId, updates) => {
       setClause.push(`last_login = $${paramIndex++}`);
       params.push(updates.lastLogin);
     }
+    if (updates.currentChallenge !== undefined) {
+      setClause.push(`current_challenge = $${paramIndex++}`);
+      params.push(updates.currentChallenge);
+    }
     
     if (setClause.length === 0) {
       return await findUser(userId);

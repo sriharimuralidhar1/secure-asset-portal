@@ -418,8 +418,8 @@ router.post('/passkey/register/finish', async (req, res) => {
 
     const user = await findUser({ email });
     console.log('👤 User found:', user ? 'Yes' : 'No');
-    console.log('📋 Challenge exists:', !!user?.currentChallenge);
-    if (!user || !user.currentChallenge) {
+    console.log('📋 Challenge exists:', !!user?.current_challenge);
+    if (!user || !user.current_challenge) {
       console.error('❌ Invalid registration state - user or challenge missing');
       return res.status(400).json({
         error: 'Invalid registration state',
@@ -431,7 +431,7 @@ router.post('/passkey/register/finish', async (req, res) => {
     const attestationObject = credential.response.attestationObject;
     
     console.log('🔍 Client data JSON:', clientDataJSON);
-    console.log('🔍 Expected challenge:', user.currentChallenge);
+    console.log('🔍 Expected challenge:', user.current_challenge);
     console.log('🔍 Received challenge:', clientDataJSON.challenge);
     
     // Convert credential data to expected format for fido2-lib (needs ArrayBuffer)
@@ -463,7 +463,7 @@ router.post('/passkey/register/finish', async (req, res) => {
     });
     
     const attestationExpectations = {
-      challenge: user.currentChallenge,
+      challenge: user.current_challenge,
       origin: origin,
       factor: "either"
     };
@@ -563,7 +563,7 @@ router.post('/passkey/authenticate/begin', async (req, res) => {
   try {
     const { email } = req.body;
     console.log('🔍 Passkey auth begin for email:', email);
-    console.log('🔍 Current passkeys in database:', mockDatabase.passkeys.length);
+    console.log('🔍 Current passkeys in database: (checking per user)');
 
     // If email provided, find user's passkeys
     let allowCredentials = [];
@@ -1038,7 +1038,7 @@ router.post('/passkey/add/finish', async (req, res) => {
     console.log('🔑 Finishing passkey addition for email:', email);
 
     const user = await findUser({ email });
-    if (!user || !user.currentChallenge) {
+    if (!user || !user.current_challenge) {
       return res.status(400).json({
         error: 'Invalid session',
         message: 'Session expired or invalid. Please try again.'
@@ -1047,7 +1047,7 @@ router.post('/passkey/add/finish', async (req, res) => {
 
     const clientDataJSON = JSON.parse(Buffer.from(credential.response.clientDataJSON, 'base64').toString());
     
-    console.log('🔍 Expected challenge:', user.currentChallenge);
+    console.log('🔍 Expected challenge:', user.current_challenge);
     console.log('🔍 Received challenge:', clientDataJSON.challenge);
     
     // Convert credential data to expected format for fido2-lib (needs ArrayBuffer)
@@ -1068,7 +1068,7 @@ router.post('/passkey/add/finish', async (req, res) => {
     };
     
     const attestationExpectations = {
-      challenge: user.currentChallenge,
+      challenge: user.current_challenge,
       origin: origin,
       factor: "either"
     };
