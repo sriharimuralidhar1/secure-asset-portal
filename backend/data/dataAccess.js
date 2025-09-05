@@ -26,7 +26,22 @@ const findUser = async (criteria) => {
     }
     
     const result = await query(queryText, params);
-    return result.rows[0] || null;
+    const user = result.rows[0];
+    
+    if (!user) return null;
+    
+    // Convert snake_case to camelCase for JavaScript usage
+    return {
+      ...user,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      twoFactorEnabled: user.two_factor_enabled,
+      twoFactorSecret: user.two_factor_secret,
+      lastLogin: user.last_login,
+      currentChallenge: user.current_challenge,
+      createdAt: user.created_at,
+      updatedAt: user.updated_at
+    };
   } catch (error) {
     console.error('❌ Error finding user:', error);
     return null;
@@ -110,7 +125,22 @@ const updateUser = async (userId, updates) => {
     `;
     
     const result = await query(queryText, params);
-    return result.rows[0];
+    const user = result.rows[0];
+    
+    if (!user) return null;
+    
+    // Convert snake_case to camelCase for JavaScript usage
+    return {
+      ...user,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      twoFactorEnabled: user.two_factor_enabled,
+      twoFactorSecret: user.two_factor_secret,
+      lastLogin: user.last_login,
+      currentChallenge: user.current_challenge,
+      createdAt: user.created_at,
+      updatedAt: user.updated_at
+    };
   } catch (error) {
     console.error('❌ Error updating user:', error);
     throw error;
@@ -137,17 +167,28 @@ const findPasskeys = async (criteria) => {
     }
     
     const result = await query(queryText, params);
-    return result.rows.map(row => ({
-      id: row.id,
-      userId: row.user_id,
-      credentialId: row.credential_id,
-      credentialPublicKey: row.credential_public_key,
-      counter: row.counter,
-      transports: row.transports,
-      createdAt: row.created_at,
-      lastUsed: row.last_used,
-      name: row.name
-    }));
+    return result.rows.map(row => {
+      // Handle transports from DB - it might be JSONB or string
+      let parsedTransports;
+      try {
+        parsedTransports = typeof row.transports === 'string' ? JSON.parse(row.transports) : row.transports;
+      } catch (parseError) {
+        console.warn('⚠️  Failed to parse transports for passkey:', row.id, row.transports);
+        parsedTransports = ['internal'];
+      }
+      
+      return {
+        id: row.id,
+        userId: row.user_id,
+        credentialId: row.credential_id,
+        credentialPublicKey: row.credential_public_key,
+        counter: row.counter,
+        transports: parsedTransports,
+        createdAt: row.created_at,
+        lastUsed: row.last_used,
+        name: row.name
+      };
+    });
   } catch (error) {
     console.error('❌ Error finding passkeys:', error);
     return [];
@@ -163,25 +204,39 @@ const addPasskey = async (passkeyData) => {
       RETURNING *
     `;
     
+    // Handle transports - ensure it's properly formatted for JSONB storage
+    const transports = passkeyData.transports || ['internal'];
+    const transportsForDB = Array.isArray(transports) ? JSON.stringify(transports) : transports;
+    
     const params = [
       id,
       passkeyData.userId,
       passkeyData.credentialId,
       passkeyData.credentialPublicKey,
       passkeyData.counter || 0,
-      JSON.stringify(passkeyData.transports || ['internal']),
+      transportsForDB,
       passkeyData.name || 'Passkey'
     ];
     
     const result = await query(queryText, params);
     const row = result.rows[0];
+    
+    // Handle transports from DB - it might be JSONB or string
+    let parsedTransports;
+    try {
+      parsedTransports = typeof row.transports === 'string' ? JSON.parse(row.transports) : row.transports;
+    } catch (parseError) {
+      console.warn('⚠️  Failed to parse transports, using default:', row.transports);
+      parsedTransports = ['internal'];
+    }
+    
     return {
       id: row.id,
       userId: row.user_id,
       credentialId: row.credential_id,
       credentialPublicKey: row.credential_public_key,
       counter: row.counter,
-      transports: JSON.parse(row.transports),
+      transports: parsedTransports,
       name: row.name,
       createdAt: row.created_at
     };
@@ -221,13 +276,22 @@ const updatePasskey = async (passkeyId, updates) => {
     const row = result.rows[0];
     if (!row) return null;
     
+    // Handle transports from DB - it might be JSONB or string
+    let parsedTransports;
+    try {
+      parsedTransports = typeof row.transports === 'string' ? JSON.parse(row.transports) : row.transports;
+    } catch (parseError) {
+      console.warn('⚠️  Failed to parse transports for passkey update:', row.id, row.transports);
+      parsedTransports = ['internal'];
+    }
+    
     return {
       id: row.id,
       userId: row.user_id,
       credentialId: row.credential_id,
       credentialPublicKey: row.credential_public_key,
       counter: row.counter,
-      transports: JSON.parse(row.transports),
+      transports: parsedTransports,
       name: row.name,
       createdAt: row.created_at,
       lastUsed: row.last_used
