@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
-const { findAssets, addAsset, updateAsset, deleteAsset, addAuditLog } = require('../data/mockDatabase');
+const { findAssets, addAsset, updateAsset, deleteAsset, addAuditLog } = require('../data/dataAccess');
 const router = express.Router();
 
 // Authentication middleware
@@ -54,9 +54,9 @@ const validateAsset = [
 ];
 
 // Get all assets for authenticated user
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
-    const userAssets = findAssets({ userId: req.user.userId });
+    const userAssets = await findAssets({ userId: req.user.userId });
     
     res.json({
       assets: userAssets,
@@ -73,9 +73,9 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 // Get asset by ID
-router.get('/:id', authenticateToken, (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const userAssets = findAssets({ userId: req.user.userId, id: req.params.id });
+    const userAssets = await findAssets({ userId: req.user.userId, id: req.params.id });
     const asset = userAssets[0];
 
     if (!asset) {
@@ -96,7 +96,7 @@ router.get('/:id', authenticateToken, (req, res) => {
 });
 
 // Create new asset
-router.post('/', authenticateToken, validateAsset, (req, res) => {
+router.post('/', authenticateToken, validateAsset, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -108,7 +108,7 @@ router.post('/', authenticateToken, validateAsset, (req, res) => {
 
     const { name, type, value, description, metadata } = req.body;
 
-    const asset = addAsset({
+    const asset = await addAsset({
       userId: req.user.userId,
       name,
       type,
@@ -118,7 +118,7 @@ router.post('/', authenticateToken, validateAsset, (req, res) => {
     });
     
     // Log asset creation
-    addAuditLog({
+    await addAuditLog({
       userId: req.user.userId,
       action: 'create_asset',
       resourceType: 'asset',
@@ -141,7 +141,7 @@ router.post('/', authenticateToken, validateAsset, (req, res) => {
 });
 
 // Update asset
-router.put('/:id', authenticateToken, validateAsset, (req, res) => {
+router.put('/:id', authenticateToken, validateAsset, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -151,7 +151,7 @@ router.put('/:id', authenticateToken, validateAsset, (req, res) => {
       });
     }
 
-    const userAssets = findAssets({ userId: req.user.userId, id: req.params.id });
+    const userAssets = await findAssets({ userId: req.user.userId, id: req.params.id });
     const existingAsset = userAssets[0];
 
     if (!existingAsset) {
@@ -163,7 +163,7 @@ router.put('/:id', authenticateToken, validateAsset, (req, res) => {
 
     const { name, type, value, description, metadata } = req.body;
     
-    const updatedAsset = updateAsset(req.params.id, {
+    const updatedAsset = await updateAsset(req.params.id, {
       name,
       type,
       value: parseFloat(value),
@@ -172,7 +172,7 @@ router.put('/:id', authenticateToken, validateAsset, (req, res) => {
     });
     
     // Log asset update
-    addAuditLog({
+    await addAuditLog({
       userId: req.user.userId,
       action: 'update_asset',
       resourceType: 'asset',
@@ -196,9 +196,9 @@ router.put('/:id', authenticateToken, validateAsset, (req, res) => {
 });
 
 // Delete asset
-router.delete('/:id', authenticateToken, (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const userAssets = findAssets({ userId: req.user.userId, id: req.params.id });
+    const userAssets = await findAssets({ userId: req.user.userId, id: req.params.id });
     const asset = userAssets[0];
 
     if (!asset) {
@@ -208,10 +208,10 @@ router.delete('/:id', authenticateToken, (req, res) => {
       });
     }
 
-    deleteAsset(req.params.id);
+    await deleteAsset(req.params.id);
     
     // Log asset deletion
-    addAuditLog({
+    await addAuditLog({
       userId: req.user.userId,
       action: 'delete_asset',
       resourceType: 'asset',
@@ -233,9 +233,9 @@ router.delete('/:id', authenticateToken, (req, res) => {
 });
 
 // Get assets by type
-router.get('/type/:type', authenticateToken, (req, res) => {
+router.get('/type/:type', authenticateToken, async (req, res) => {
   try {
-    const userAssets = findAssets({ userId: req.user.userId, type: req.params.type });
+    const userAssets = await findAssets({ userId: req.user.userId, type: req.params.type });
     
     res.json({
       assets: userAssets,

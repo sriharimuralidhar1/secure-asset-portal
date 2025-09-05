@@ -1,6 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const { findAssets, findUser } = require('../data/mockDatabase');
+const { findAssets, findUser } = require('../data/dataAccess');
 const router = express.Router();
 
 // Authentication middleware
@@ -48,9 +48,9 @@ const assetCategories = [
 ];
 
 // Portfolio summary report
-router.get('/portfolio-summary', authenticateToken, (req, res) => {
+router.get('/portfolio-summary', authenticateToken, async (req, res) => {
   try {
-    const userAssets = findAssets({ userId: req.user.userId });
+    const userAssets = await findAssets({ userId: req.user.userId });
     
     const totalValue = userAssets.reduce((sum, asset) => sum + parseFloat(asset.value), 0);
     const totalAssets = userAssets.length;
@@ -89,9 +89,9 @@ router.get('/portfolio-summary', authenticateToken, (req, res) => {
 });
 
 // Asset performance report
-router.get('/asset-performance', authenticateToken, (req, res) => {
+router.get('/asset-performance', authenticateToken, async (req, res) => {
   try {
-    const userAssets = findAssets({ userId: req.user.userId });
+    const userAssets = await findAssets({ userId: req.user.userId });
     
     const performanceData = userAssets.map(asset => {
       const purchaseValue = asset.purchaseValue || asset.value;
@@ -137,9 +137,9 @@ router.get('/asset-performance', authenticateToken, (req, res) => {
 });
 
 // Monthly growth report
-router.get('/monthly-growth', authenticateToken, (req, res) => {
+router.get('/monthly-growth', authenticateToken, async (req, res) => {
   try {
-    const userAssets = findAssets({ userId: req.user.userId });
+    const userAssets = await findAssets({ userId: req.user.userId });
     
     // Generate monthly data for the last 12 months
     const monthlyData = [];
@@ -178,10 +178,10 @@ router.get('/monthly-growth', authenticateToken, (req, res) => {
 });
 
 // Export data for external use
-router.get('/export', authenticateToken, (req, res) => {
+router.get('/export', authenticateToken, async (req, res) => {
   try {
     const { format = 'json' } = req.query;
-    const userAssets = findAssets({ userId: req.user.userId });
+    const userAssets = await findAssets({ userId: req.user.userId });
     
     if (format === 'csv') {
       // Generate CSV format
@@ -212,10 +212,10 @@ router.get('/export', authenticateToken, (req, res) => {
 });
 
 // Tax report (basic implementation)
-router.get('/tax-report', authenticateToken, (req, res) => {
+router.get('/tax-report', authenticateToken, async (req, res) => {
   try {
     const { year = new Date().getFullYear() } = req.query;
-    const userAssets = findAssets({ userId: req.user.userId });
+    const userAssets = await findAssets({ userId: req.user.userId });
     
     // Filter assets by year
     const yearAssets = userAssets.filter(asset => {

@@ -2,7 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { body, validationResult } = require('express-validator');
-const { findUser, updateUser, deleteUser, addAuditLog } = require('../data/mockDatabase');
+const { findUser, updateUser, addAuditLog } = require('../data/dataAccess');
 const router = express.Router();
 
 // Authentication middleware
@@ -39,9 +39,9 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Get current user profile
-router.get('/profile', authenticateToken, (req, res) => {
+router.get('/profile', authenticateToken, async (req, res) => {
   try {
-    const user = findUser(req.user.userId);
+    const user = await findUser(req.user.userId);
     
     if (!user) {
       return res.status(404).json({
@@ -75,7 +75,7 @@ router.put('/profile', authenticateToken, [
   body('firstName').optional().isLength({ min: 2 }).trim().escape(),
   body('lastName').optional().isLength({ min: 2 }).trim().escape(),
   body('email').optional().isEmail().normalizeEmail(),
-], (req, res) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -85,7 +85,7 @@ router.put('/profile', authenticateToken, [
       });
     }
 
-    const user = findUser(req.user.userId);
+    const user = await findUser(req.user.userId);
     
     if (!user) {
       return res.status(404).json({
@@ -98,7 +98,7 @@ router.put('/profile', authenticateToken, [
 
     // Check if email is already taken by another user
     if (email && email !== user.email) {
-      const existingUser = findUser({ email });
+      const existingUser = await findUser({ email });
       if (existingUser && existingUser.id !== req.user.userId) {
         return res.status(409).json({
           error: 'Email already exists',
@@ -113,10 +113,10 @@ router.put('/profile', authenticateToken, [
     if (lastName) updates.lastName = lastName;
     if (email) updates.email = email;
     
-    const updatedUser = updateUser(req.user.userId, updates);
+    const updatedUser = await updateUser(req.user.userId, updates);
     
     // Log profile update
-    addAuditLog({
+    await addAuditLog({
       userId: req.user.userId,
       action: 'update_profile',
       resourceType: 'user',
@@ -159,7 +159,7 @@ router.put('/password', authenticateToken, [
     }
 
     const { currentPassword, newPassword } = req.body;
-    const user = findUser(req.user.userId);
+    const user = await findUser(req.user.userId);
     
     if (!user) {
       return res.status(404).json({
@@ -182,10 +182,10 @@ router.put('/password', authenticateToken, [
     const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
 
     // Update password
-    updateUser(req.user.userId, { password: hashedNewPassword });
+    await updateUser(req.user.userId, { password: hashedNewPassword });
     
     // Log password change
-    addAuditLog({
+    await addAuditLog({
       userId: req.user.userId,
       action: 'change_password',
       resourceType: 'user',
@@ -218,7 +218,7 @@ router.delete('/account', authenticateToken, [
     }
 
     const { password } = req.body;
-    const user = findUser(req.user.userId);
+    const user = await findUser(req.user.userId);
     
     if (!user) {
       return res.status(404).json({
@@ -237,7 +237,7 @@ router.delete('/account', authenticateToken, [
     }
 
     // Log account deletion
-    addAuditLog({
+    await addAuditLog({
       userId: req.user.userId,
       action: 'delete_account',
       resourceType: 'user',
@@ -245,7 +245,7 @@ router.delete('/account', authenticateToken, [
     });
     
     // Remove user (this also removes their assets)
-    deleteUser(req.user.userId);
+    await deleteUser(req.user.userId);
 
     res.json({
       message: 'Account deleted successfully'

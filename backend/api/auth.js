@@ -21,7 +21,7 @@ const fido2 = new Fido2Lib({
   authenticatorRequireResidentKey: true,
   authenticatorUserVerification: "required"
 });
-const { findUser, addUser, updateUser, addAuditLog, findPasskeys, addPasskey, updatePasskey, mockDatabase } = require('../data/mockDatabase');
+const { findUser, addUser, updateUser, findPasskeys, addPasskey, updatePasskey, addAuditLog } = require('../data/dataAccess');
 const emailService = require('../services/emailService');
 const router = express.Router();
 
@@ -70,7 +70,7 @@ router.post('/register', validateRegistration, async (req, res) => {
     }
 
     // Check if user already exists
-    const existingUser = findUser({ email });
+    const existingUser = await findUser({ email });
     if (existingUser) {
       return res.status(409).json({
         error: 'User already exists',
@@ -89,7 +89,7 @@ router.post('/register', validateRegistration, async (req, res) => {
     });
 
     // Create user
-    const user = addUser({
+    const user = await addUser({
       email,
       firstName,
       lastName,
@@ -156,7 +156,7 @@ router.post('/login', validateLogin, async (req, res) => {
     const { email, password, twoFactorToken } = req.body;
 
     // Find user
-    const user = findUser({ email });
+    const user = await findUser({ email });
     if (!user) {
       return res.status(401).json({
         error: 'Invalid credentials',
@@ -198,10 +198,10 @@ router.post('/login', validateLogin, async (req, res) => {
     }
 
     // Update last login
-    updateUser(user.id, { lastLogin: new Date().toISOString() });
+    await updateUser(user.id, { lastLogin: new Date().toISOString() });
     
     // Log successful login
-    addAuditLog({
+    await addAuditLog({
       userId: user.id,
       action: 'login',
       resourceType: 'user',
@@ -261,7 +261,7 @@ router.post('/enable-2fa', async (req, res) => {
   try {
     const { email, token } = req.body;
 
-    const user = findUser({ email });
+    const user = await findUser({ email });
     if (!user) {
       return res.status(404).json({
         error: 'User not found'
@@ -282,10 +282,10 @@ router.post('/enable-2fa', async (req, res) => {
       });
     }
 
-    updateUser(user.id, { twoFactorEnabled: true });
+    await updateUser(user.id, { twoFactorEnabled: true });
 
     // Send dedicated 2FA confirmation email
-    const updatedUser = findUser(user.id);
+    const updatedUser = await findUser(user.id);
     emailService.send2FAConfirmationEmail(updatedUser)
       .then(result => {
         if (result.success) {
@@ -321,7 +321,7 @@ router.post('/passkey/register/begin', async (req, res) => {
       });
     }
 
-    const user = findUser({ email });
+    const user = await findUser({ email });
     console.log('👤 User found:', user ? `Yes (ID: ${user.id})` : 'No');
     if (!user) {
       console.error('❌ User not found for email:', email);
@@ -332,7 +332,7 @@ router.post('/passkey/register/begin', async (req, res) => {
     }
 
     // Get existing passkeys for this user
-    const existingPasskeys = findPasskeys({ userId: user.id });
+    const existingPasskeys = await findPasskeys({ userId: user.id });
     console.log('🔑 Existing passkeys count:', existingPasskeys.length);
 
     const excludeCredentials = existingPasskeys.map(passkey => ({
@@ -397,7 +397,7 @@ router.post('/passkey/register/begin', async (req, res) => {
     console.log('🔧 Full options object:', JSON.stringify(customOptions, null, 2));
 
     // Store challenge temporarily (in production, use Redis or similar)
-    updateUser(user.id, { currentChallenge: customOptions.challenge });
+    await updateUser(user.id, { currentChallenge: customOptions.challenge });
 
     res.json(customOptions);
   } catch (error) {
@@ -416,7 +416,7 @@ router.post('/passkey/register/finish', async (req, res) => {
     console.log('🔍 Passkey registration finish for email:', email);
     console.log('🔑 Credential received:', !!credential);
 
-    const user = findUser({ email });
+    const user = await findUser({ email });
     console.log('👤 User found:', user ? 'Yes' : 'No');
     console.log('📋 Challenge exists:', !!user?.currentChallenge);
     if (!user || !user.currentChallenge) {
@@ -494,7 +494,7 @@ router.post('/passkey/register/finish', async (req, res) => {
     console.log('🔑 Public Key present:', !!credentialPublicKey);
     console.log('🔑 Counter:', counter);
     
-    const passkey = addPasskey({
+    const passkey = await addPasskey({
       userId: user.id,
       credentialId: credentialId,
       credentialPublicKey: credentialPublicKey || '',
@@ -515,10 +515,10 @@ router.post('/passkey/register/finish', async (req, res) => {
     console.log('✅ Passkey stored successfully:', passkey.id);
 
     // Clear challenge
-    updateUser(user.id, { currentChallenge: null });
+    await updateUser(user.id, { currentChallenge: null });
 
     // Log the registration
-    addAuditLog({
+    await addAuditLog({
       userId: user.id,
       action: 'passkey_registered',
       resourceType: 'user',
@@ -568,10 +568,10 @@ router.post('/passkey/authenticate/begin', async (req, res) => {
     // If email provided, find user's passkeys
     let allowCredentials = [];
     if (email) {
-      const user = findUser({ email });
+      const user = await findUser({ email });
       console.log('👤 User found:', user ? 'Yes' : 'No');
       if (user) {
-        const userPasskeys = findPasskeys({ userId: user.id });
+        const userPasskeys = await findPasskeys({ userId: user.id });
         console.log('🔑 User passkeys count:', userPasskeys.length);
         if (userPasskeys.length === 0) {
           return res.status(400).json({
@@ -670,15 +670,15 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
     console.log('🔍 Browser credential ID:', browserCredentialId.substring(0, 10) + '...');
     
     let passkey = null;
-    const passkeys = findPasskeys({ credentialId: browserCredentialId });
+    const passkeys = await findPasskeys({ credentialId: browserCredentialId });
     console.log('🔑 Passkeys found by exact credential ID:', passkeys.length);
     
     if (passkeys.length === 0 && email) {
       // Fallback: look for any passkey for this user
       console.log('🔄 Fallback: Looking for any passkey for user email:', email);
-      const user = findUser({ email });
+      const user = await findUser({ email });
       if (user) {
-        const userPasskeys = findPasskeys({ userId: user.id });
+        const userPasskeys = await findPasskeys({ userId: user.id });
         console.log('🔑 User passkeys found:', userPasskeys.length);
         if (userPasskeys.length > 0) {
           passkey = userPasskeys.find(pk => pk.credentialId === browserCredentialId);
@@ -703,7 +703,7 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
       });
     }
 
-    const user = findUser(passkey.userId);
+    const user = await findUser(passkey.userId);
     if (!user) {
       return res.status(400).json({
         error: 'User not found'
@@ -782,19 +782,19 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
     // Update passkey counter and last used
     // Ensure counter always increases to prevent rollback detection
     const updatedCounter = Math.max(newCounter || 0, (passkey.counter || 0) + 1);
-    updatePasskey(passkey.id, {
+    await updatePasskey(passkey.id, {
       counter: updatedCounter,
       lastUsed: new Date().toISOString()
     });
 
     // Update user last login
-    updateUser(user.id, { lastLogin: new Date().toISOString() });
+    await updateUser(user.id, { lastLogin: new Date().toISOString() });
 
     // Clear challenge
     delete req.app.locals.authChallenges[challengeKey];
 
     // Log successful login
-    addAuditLog({
+    await addAuditLog({
       userId: user.id,
       action: 'passkey_login',
       resourceType: 'user',
@@ -862,7 +862,7 @@ router.get('/passkeys/:email', async (req, res) => {
     const { email } = req.params;
     console.log(`📋 Checking passkeys for email: ${email}`);
     
-    const user = findUser({ email });
+    const user = await findUser({ email });
     
     if (!user) {
       return res.status(404).json({ 
@@ -872,7 +872,7 @@ router.get('/passkeys/:email', async (req, res) => {
       });
     }
     
-    const passkeys = findPasskeys({ userId: user.id });
+    const passkeys = await findPasskeys({ userId: user.id });
     console.log(`📋 Found ${passkeys.length} passkey(s) for user ${user.email}`);
     
     const safePasskeys = passkeys.map(passkey => ({
@@ -910,14 +910,14 @@ router.get('/passkeys', async (req, res) => {
       });
     }
 
-    const user = findUser({ email });
+    const user = await findUser({ email });
     if (!user) {
       return res.status(404).json({
         error: 'User not found'
       });
     }
 
-    const passkeys = findPasskeys({ userId: user.id });
+    const passkeys = await findPasskeys({ userId: user.id });
     const safePasskeys = passkeys.map(passkey => ({
       id: passkey.id,
       name: passkey.name,
@@ -951,7 +951,7 @@ router.post('/passkey/add/begin', async (req, res) => {
       });
     }
 
-    const user = findUser({ email });
+    const user = await findUser({ email });
     console.log('👤 User found:', user ? `Yes (ID: ${user.id})` : 'No');
     if (!user) {
       return res.status(404).json({
@@ -961,7 +961,7 @@ router.post('/passkey/add/begin', async (req, res) => {
     }
 
     // Get existing passkeys for this user
-    const existingPasskeys = findPasskeys({ userId: user.id });
+    const existingPasskeys = await findPasskeys({ userId: user.id });
     console.log('🔑 Existing passkeys count:', existingPasskeys.length);
 
     const excludeCredentials = existingPasskeys.map(passkey => ({
@@ -1019,7 +1019,7 @@ router.post('/passkey/add/begin', async (req, res) => {
     console.log('✅ Additional passkey options generated successfully');
 
     // Store challenge temporarily
-    updateUser(user.id, { currentChallenge: customOptions.challenge });
+    await updateUser(user.id, { currentChallenge: customOptions.challenge });
 
     res.json(customOptions);
   } catch (error) {
@@ -1037,7 +1037,7 @@ router.post('/passkey/add/finish', async (req, res) => {
     const { email, credential } = req.body;
     console.log('🔑 Finishing passkey addition for email:', email);
 
-    const user = findUser({ email });
+    const user = await findUser({ email });
     if (!user || !user.currentChallenge) {
       return res.status(400).json({
         error: 'Invalid session',
@@ -1090,7 +1090,7 @@ router.post('/passkey/add/finish', async (req, res) => {
     const counter = regResult.authnrData.get('counter');
     
     // Check if this passkey already exists
-    const existingPasskey = findPasskeys({ credentialId });
+    const existingPasskey = await findPasskeys({ credentialId });
     if (existingPasskey.length > 0) {
       return res.status(409).json({
         error: 'Passkey already registered',
@@ -1098,7 +1098,7 @@ router.post('/passkey/add/finish', async (req, res) => {
       });
     }
     
-    const passkey = addPasskey({
+    const passkey = await addPasskey({
       userId: user.id,
       credentialId: credentialId,
       credentialPublicKey: credentialPublicKey || '',
@@ -1119,10 +1119,10 @@ router.post('/passkey/add/finish', async (req, res) => {
     console.log('✅ Additional passkey stored successfully:', passkey.id);
 
     // Clear challenge
-    updateUser(user.id, { currentChallenge: null });
+    await updateUser(user.id, { currentChallenge: null });
 
     // Log the registration
-    addAuditLog({
+    await addAuditLog({
       userId: user.id,
       action: 'passkey_added',
       resourceType: 'user',

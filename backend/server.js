@@ -66,44 +66,50 @@ app.use('/api/assets', require('./api/assets'));
 app.use('/api/users', require('./api/users'));
 app.use('/api/reports', require('./api/reports'));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'healthy',
+// Initialize database connection
+const { testConnection } = require('./data/database');
+
+// Health check endpoint with database connectivity
+app.get('/health', async (req, res) => {
+  const dbStatus = await testConnection();
+  res.status(dbStatus ? 200 : 503).json({
+    status: dbStatus ? 'healthy' : 'unhealthy',
+    database: dbStatus ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version || '1.0.0'
   });
 });
 
-// Debug endpoint to view current database state (development only)
-app.get('/debug', (req, res) => {
+// Database status endpoint (development only)
+app.get('/debug/db-status', async (req, res) => {
   if (process.env.NODE_ENV === 'production') {
     return res.status(404).json({ error: 'Not found' });
   }
   
-  const { mockDatabase, getAllUsers } = require('./data/mockDatabase');
-  
-  const debugData = {
-    users: getAllUsers(),
-    userCount: mockDatabase.users.length,
-    passkeyCount: mockDatabase.passkeys.length,
-    assets: mockDatabase.assets.length,
-    auditLogs: mockDatabase.auditLogs.slice(-5) // Last 5 entries
-  };
-  
-  res.json(debugData);
-});
-
-// Clear database endpoint (development only)
-app.post('/debug/clear', (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(404).json({ error: 'Not found' });
+  try {
+    const { query } = require('./data/database');
+    
+    const userCount = await query('SELECT COUNT(*) FROM users');
+    const assetCount = await query('SELECT COUNT(*) FROM assets');
+    const passkeyCount = await query('SELECT COUNT(*) FROM passkeys');
+    const auditCount = await query('SELECT COUNT(*) FROM audit_logs');
+    
+    res.json({
+      database: 'PostgreSQL',
+      counts: {
+        users: parseInt(userCount.rows[0].count),
+        assets: parseInt(assetCount.rows[0].count),
+        passkeys: parseInt(passkeyCount.rows[0].count),
+        auditLogs: parseInt(auditCount.rows[0].count)
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Database query failed',
+      message: error.message
+    });
   }
-  
-  const { clearDatabase } = require('./data/mockDatabase');
-  clearDatabase();
-  
-  res.json({ message: 'Database cleared successfully' });
 });
 
 // 404 handler
@@ -140,8 +146,27 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Secure Asset Portal API running on port ${PORT}`);
-  console.log(`🛡️  Security middleware enabled`);
-  console.log(`🔒 CORS enabled for: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`);
-});
+// Initialize database and start server
+const startServer = async () => {
+  try {
+    const { testConnection } = require('./data/database');
+    const dbConnected = await testConnection();
+    
+    if (!dbConnected) {
+      console.error('❌ Failed to connect to database. Server not started.');
+      process.exit(1);
+    }
+    
+    app.listen(PORT, () => {
+      console.log(`🚀 Secure Asset Portal API running on port ${PORT}`);
+      console.log(`🛡️  Security middleware enabled`);
+      console.log(`🔒 CORS enabled for: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`);
+      console.log(`🗄️  PostgreSQL database connected`);
+    });
+  } catch (error) {
+    console.error('❌ Server startup failed:', error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
