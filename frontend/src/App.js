@@ -11,6 +11,8 @@ import RegisterPage from './pages/RegisterPage';
 import Dashboard from './pages/Dashboard';
 import AssetList from './pages/AssetList';
 import AddAsset from './pages/AddAsset';
+import AdminConsole from './pages/AdminConsole';
+import AdminLoginPage from './pages/AdminLoginPage';
 
 // Context
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -62,6 +64,13 @@ const PublicRoute = ({ children }) => {
   return !user ? children : <Navigate to="/dashboard" />;
 };
 
+const AdminRoute = ({ children }) => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" />;
+  if (user.role !== 'admin') return <Navigate to="/dashboard" />;
+  return children;
+};
+
 function App() {
   return (
     <ThemeProvider theme={theme}>
@@ -102,6 +111,14 @@ function App() {
                   </PublicRoute>
                 } 
               />
+              <Route 
+                path="/admin/login" 
+                element={
+                  <PublicRoute>
+                    <AdminLoginPage />
+                  </PublicRoute>
+                } 
+              />
               
               {/* Private Routes */}
               <Route 
@@ -126,6 +143,16 @@ function App() {
                   <PrivateRoute>
                     <AddAsset />
                   </PrivateRoute>
+                } 
+              />
+              
+              {/* Admin Routes */}
+              <Route 
+                path="/admin" 
+                element={
+                  <AdminRoute>
+                    <AdminConsole />
+                  </AdminRoute>
                 } 
               />
               

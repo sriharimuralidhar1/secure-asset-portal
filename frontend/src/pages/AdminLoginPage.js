@@ -26,8 +26,27 @@ const Title = styled.h1`
   font-size: 1.875rem;
   font-weight: 700;
   text-align: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.5rem;
   color: ${props => props.theme.colors.text};
+`;
+
+const Subtitle = styled.p`
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: ${props => props.theme.colors.textLight};
+  font-size: 0.875rem;
+`;
+
+const AdminBadge = styled.div`
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: ${props => props.theme.borderRadius.md};
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  box-shadow: ${props => props.theme.shadows.sm};
 `;
 
 const Form = styled.form`
@@ -119,7 +138,7 @@ const TwoFactorText = styled.p`
   color: ${props => props.theme.colors.textLight};
 `;
 
-const LoginPage = () => {
+const AdminLoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
@@ -140,8 +159,15 @@ const LoginPage = () => {
         setLoginEmail(data.email);
         toast.info('Please enter your two-factor authentication code');
       } else if (result.success) {
-        toast.success('Login successful!');
-        navigate('/dashboard');
+        // Check if user has admin role
+        if (result.user && result.user.role === 'admin') {
+          toast.success('Admin login successful!');
+          navigate('/admin');
+        } else {
+          toast.error('Access denied: Admin privileges required');
+          // Log out the user since they don't have admin access
+          // The useAuth context should handle this
+        }
       }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Login failed');
@@ -157,8 +183,15 @@ const LoginPage = () => {
       const result = await login(loginEmail, data.password, data.twoFactorToken);
       
       if (result.success) {
-        toast.success('Login successful!');
-        navigate('/dashboard');
+        // Check if user has admin role
+        if (result.user && result.user.role === 'admin') {
+          toast.success('Admin login successful!');
+          navigate('/admin');
+        } else {
+          toast.error('Access denied: Admin privileges required');
+          // Reset the form
+          resetForm();
+        }
       }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Invalid two-factor code');
@@ -176,13 +209,18 @@ const LoginPage = () => {
   return (
     <LoginContainer>
       <LoginCard>
-        <Title>Secure Asset Portal</Title>
+        <Title>🔐 Admin Portal</Title>
+        <Subtitle>Secure Asset Portal Administration</Subtitle>
+        
+        <AdminBadge>
+          ⚠️ ADMINISTRATOR ACCESS REQUIRED
+        </AdminBadge>
         
         {!requiresTwoFactor ? (
           <>
             <Form onSubmit={handleSubmit(onSubmit)}>
               <FormGroup>
-                <Label htmlFor="email">Email Address</Label>
+                <Label htmlFor="email">Admin Email Address</Label>
                 <Input
                   id="email"
                   type="email"
@@ -199,7 +237,7 @@ const LoginPage = () => {
               </FormGroup>
 
               <FormGroup>
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Admin Password</Label>
                 <Input
                   id="password"
                   type="password"
@@ -212,55 +250,15 @@ const LoginPage = () => {
               </FormGroup>
 
               <Button type="submit" disabled={loading}>
-                {loading ? 'Signing In...' : 'Sign In'}
+                {loading ? 'Authenticating...' : 'Sign In as Admin'}
               </Button>
             </Form>
-            
-            <div style={{
-              margin: '1rem 0',
-              textAlign: 'center',
-              position: 'relative'
-            }}>
-              <div style={{
-                borderTop: '1px solid #e5e7eb',
-                margin: '1rem 0'
-              }}>
-                <span style={{
-                  background: 'white',
-                  padding: '0 1rem',
-                  color: '#6b7280',
-                  fontSize: '0.875rem',
-                  position: 'relative',
-                  top: '-0.6rem'
-                }}>
-                  or
-                </span>
-              </div>
-              
-              <Button 
-                type="button" 
-                onClick={() => {
-                  navigate('/login/passkey');
-                }}
-                disabled={loading}
-                style={{
-                  background: '#2563eb',
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                🔐 Sign in with Passkey
-              </Button>
-            </div>
           </>
         ) : (
           <div>
             <TwoFactorSection>
               <TwoFactorText>
-                Two-factor authentication is required for your account.
+                Two-factor authentication is required for admin access.
                 Please enter the 6-digit code from your authenticator app.
               </TwoFactorText>
               
@@ -302,7 +300,7 @@ const LoginPage = () => {
                 </Button>
                 
                 <Button type="button" onClick={resetForm} style={{ marginTop: '0.5rem', background: '#6b7280' }}>
-                  Back to Login
+                  Back to Admin Login
                 </Button>
               </Form>
             </TwoFactorSection>
@@ -311,14 +309,8 @@ const LoginPage = () => {
         
         {!requiresTwoFactor && (
           <div>
-            <LinkStyled to="/register">
-              Don't have an account? Create one here
-            </LinkStyled>
-            <LinkStyled to="/passkey/add" style={{ marginTop: '0.5rem' }}>
-              Add passkey to existing account
-            </LinkStyled>
-            <LinkStyled to="/admin/login" style={{ marginTop: '0.5rem', color: '#dc2626', fontWeight: '600' }}>
-              🔐 Admin Login
+            <LinkStyled to="/login">
+              ← Back to User Login
             </LinkStyled>
           </div>
         )}
@@ -327,4 +319,4 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage;
+export default AdminLoginPage;

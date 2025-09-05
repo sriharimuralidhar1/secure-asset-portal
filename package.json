@@ -28,6 +28,7 @@
     "lint": "eslint backend frontend --ext .js,.jsx,.ts,.tsx",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "security:audit": "npm audit && cd backend && npm audit && cd ../frontend && npm audit",
+    "admin:create": "node scripts/create-admin.js",
     "open:brave": "./scripts/open-brave.sh"
   },
   "repository": {
@@ -45,6 +46,11 @@
   ],
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "bcrypt": "^5.1.0",
+    "uuid": "^9.0.0",
+    "pg": "^8.11.0"
+  },
   "devDependencies": {
     "concurrently": "^8.2.0",
     "eslint": "^8.42.0",

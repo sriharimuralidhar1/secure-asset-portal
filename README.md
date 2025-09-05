@@ -394,6 +394,39 @@ frontend/src/
 - `PUT /api/users/profile` - Update profile
 - `GET /api/users/audit-log` - View activity history
 
+### Admin Management
+- `GET /api/admin/users` - List all users (admin only)
+- `DELETE /api/admin/users/:id` - Delete user account (admin only)
+
+## 🔐 Admin Account Setup
+
+**Security Notice**: Admin accounts can only be created by system administrators with direct database access. This functionality is intentionally NOT exposed through the web interface.
+
+### Creating Admin Accounts
+
+```bash
+# Interactive admin creation script (recommended)
+npm run admin:create
+
+# Or run directly
+node scripts/create-admin.js
+```
+
+### Admin Features
+- 🔐 **Secure Admin Login**: Separate admin login page at `/admin/login`
+- 👥 **User Management**: View and delete user accounts
+- 📊 **Audit Logging**: All admin actions are logged
+- 🛡️ **Role-Based Access**: Only users with `role: 'admin'` can access admin features
+- 🔒 **Same Security**: 2FA and all security features apply to admin accounts
+
+### Admin Login Process
+1. Navigate to `/admin/login` or click "🔐 Admin Login" from regular login
+2. Enter admin credentials (email/password)
+3. Complete 2FA if enabled
+4. Access admin console at `/admin`
+
+For detailed admin setup instructions, see [ADMIN_SETUP.md](ADMIN_SETUP.md).
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
