@@ -224,7 +224,6 @@ router.post('/login', validateLogin, async (req, res) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        role: user.role || 'user',
         iat: Math.floor(Date.now() / 1000)
       },
       jwtSecret,
@@ -243,7 +242,6 @@ router.post('/login', validateLogin, async (req, res) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        role: user.role || 'user',
         twoFactorEnabled: user.twoFactorEnabled
       }
     });
@@ -819,7 +817,6 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        role: user.role || 'user',
         authMethod: 'passkey',
         iat: Math.floor(Date.now() / 1000)
       },
@@ -841,7 +838,6 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        role: user.role || 'user',
         twoFactorEnabled: user.twoFactorEnabled
       }
     });

@@ -398,11 +398,11 @@ frontend/src/
 - `GET /api/admin/users` - List all users (admin only)
 - `DELETE /api/admin/users/:id` - Delete user account (admin only)
 
-## 🔐 Account Management (Backend)
+## 📊 Account Monitoring (Backend)
 
-**Security Design**: Admin functionality is handled via backend scripts rather than web interface for enhanced security.
+**Simple Design**: Pure user portal with backend monitoring scripts for observability.
 
-### Account Management Commands
+### Account Monitoring Commands
 
 ```bash
 # View all user accounts
@@ -414,27 +414,11 @@ node scripts/view-accounts.js stats
 # View asset overview by user
 node scripts/view-accounts.js assets
 
+# View passkey overview by user
+node scripts/view-accounts.js passkeys
+
 # Show recent user activity
 node scripts/view-accounts.js recent
-
-# List admin users only
-node scripts/view-accounts.js admins
-
-# Promote user to admin
-node scripts/view-accounts.js promote user@example.com
-
-# Demote admin to user
-node scripts/view-accounts.js demote admin@example.com
-```
-
-### Create Admin Account
-
-```bash
-# Interactive admin creation script
-npm run admin:create
-
-# Or run directly
-node scripts/create-admin.js
 ```
 
 ### Database Access

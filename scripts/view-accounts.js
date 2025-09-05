@@ -29,11 +29,11 @@ const commands = {
         email, 
         first_name, 
         last_name, 
-        role,
         two_factor_enabled,
         created_at,
         last_login,
-        (SELECT COUNT(*) FROM assets WHERE user_id = users.id) as asset_count
+        (SELECT COUNT(*) FROM assets WHERE user_id = users.id) as asset_count,
+        (SELECT COUNT(*) FROM passkeys WHERE user_id = users.id) as passkey_count
       FROM users 
       ORDER BY created_at DESC
     `);
@@ -46,16 +46,14 @@ const commands = {
     console.table(result.rows.map(user => ({
       Email: user.email,
       Name: `${user.first_name} ${user.last_name}`,
-      Role: user.role,
       '2FA': user.two_factor_enabled ? '✅' : '❌',
       Assets: user.asset_count,
+      Passkeys: user.passkey_count,
       Created: new Date(user.created_at).toLocaleDateString(),
       'Last Login': user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'
     })));
     
     console.log(`\n📊 Total Users: ${result.rows.length}`);
-    console.log(`👤 Regular Users: ${result.rows.filter(u => u.role === 'user').length}`);
-    console.log(`🔐 Admin Users: ${result.rows.filter(u => u.role === 'admin').length}`);
   },
   
   async stats() {
@@ -64,7 +62,6 @@ const commands = {
     const stats = await pool.query(`
       SELECT 
         (SELECT COUNT(*) FROM users) as total_users,
-        (SELECT COUNT(*) FROM users WHERE role = 'admin') as admin_users,
         (SELECT COUNT(*) FROM users WHERE two_factor_enabled = true) as users_with_2fa,
         (SELECT COUNT(*) FROM assets) as total_assets,
         (SELECT COUNT(*) FROM passkeys) as total_passkeys,
@@ -75,7 +72,6 @@ const commands = {
     
     const s = stats.rows[0];
     console.log(`👥 Total Users: ${s.total_users}`);
-    console.log(`🔐 Admin Users: ${s.admin_users}`);
     console.log(`🔒 Users with 2FA: ${s.users_with_2fa}`);
     console.log(`💰 Total Assets: ${s.total_assets}`);
     console.log(`🔑 Total Passkeys: ${s.total_passkeys}`);
@@ -142,68 +138,36 @@ const commands = {
     })));
   },
   
-  async admins() {
-    console.log('👑 Admin Users:\n');
+  async passkeys() {
+    console.log('🔑 Passkey Overview:\n');
     
-    const admins = await pool.query(`
+    const passkeys = await pool.query(`
       SELECT 
-        email, 
-        first_name, 
-        last_name, 
-        created_at,
-        last_login
-      FROM users 
-      WHERE role = 'admin'
-      ORDER BY created_at
+        u.email,
+        u.first_name,
+        u.last_name,
+        p.name as passkey_name,
+        p.credential_device_type,
+        p.created_at,
+        p.last_used
+      FROM passkeys p
+      JOIN users u ON p.user_id = u.id
+      ORDER BY p.created_at DESC
     `);
     
-    if (admins.rows.length === 0) {
-      console.log('No admin users found.');
+    if (passkeys.rows.length === 0) {
+      console.log('No passkeys found.');
       return;
     }
     
-    console.table(admins.rows.map(admin => ({
-      Email: admin.email,
-      Name: `${admin.first_name} ${admin.last_name}`,
-      Created: new Date(admin.created_at).toLocaleDateString(),
-      'Last Login': admin.last_login ? new Date(admin.last_login).toLocaleDateString() : 'Never'
+    console.table(passkeys.rows.map(pk => ({
+      User: pk.email,
+      Name: `${pk.first_name} ${pk.last_name}`,
+      'Passkey Name': pk.passkey_name,
+      'Device Type': pk.credential_device_type,
+      Created: new Date(pk.created_at).toLocaleDateString(),
+      'Last Used': pk.last_used ? new Date(pk.last_used).toLocaleDateString() : 'Never'
     })));
-  },
-  
-  async promote(email) {
-    if (!email) {
-      console.log('❌ Email required. Usage: node scripts/view-accounts.js promote user@example.com');
-      return;
-    }
-    
-    const result = await pool.query(
-      'UPDATE users SET role = $1, updated_at = NOW() WHERE email = $2 RETURNING email, role',
-      ['admin', email]
-    );
-    
-    if (result.rows.length === 0) {
-      console.log(`❌ User not found: ${email}`);
-    } else {
-      console.log(`✅ User promoted to admin: ${email}`);
-    }
-  },
-  
-  async demote(email) {
-    if (!email) {
-      console.log('❌ Email required. Usage: node scripts/view-accounts.js demote user@example.com');
-      return;
-    }
-    
-    const result = await pool.query(
-      'UPDATE users SET role = $1, updated_at = NOW() WHERE email = $2 RETURNING email, role',
-      ['user', email]
-    );
-    
-    if (result.rows.length === 0) {
-      console.log(`❌ User not found: ${email}`);
-    } else {
-      console.log(`✅ Admin demoted to user: ${email}`);
-    }
   },
   
   async help() {
@@ -214,17 +178,15 @@ COMMANDS:
   list          List all user accounts with details
   stats         Show database statistics
   assets        Show asset overview by user
+  passkeys      Show passkey overview by user
   recent        Show recent activity (last 20 actions)
-  admins        List admin users only
-  promote       Promote user to admin role
-  demote        Demote admin to user role
   help          Show this help message
 
 EXAMPLES:
   node scripts/view-accounts.js list
   node scripts/view-accounts.js stats
-  node scripts/view-accounts.js promote user@example.com
-  node scripts/view-accounts.js demote admin@example.com
+  node scripts/view-accounts.js assets
+  node scripts/view-accounts.js passkeys
 
 DATABASE COMMANDS:
   For direct database access, see DATABASE_README.md
