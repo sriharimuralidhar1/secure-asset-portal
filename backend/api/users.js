@@ -1,6 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const { body, validationResult } = require('express-validator');
 const { findUser, updateUser, deleteUser, addAuditLog } = require('../data/mockDatabase');
 const router = express.Router();
