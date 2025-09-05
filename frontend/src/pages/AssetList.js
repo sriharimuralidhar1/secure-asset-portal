@@ -125,6 +125,34 @@ const AssetValue = styled.div`
   text-align: right;
 `;
 
+const AssetActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+`;
+
+const ActionButton = styled.button`
+  padding: 0.25rem 0.5rem;
+  border: 1px solid ${props => props.variant === 'danger' ? props.theme.colors.error : props.theme.colors.border};
+  background: ${props => props.variant === 'danger' ? props.theme.colors.error : 'white'};
+  color: ${props => props.variant === 'danger' ? 'white' : props.theme.colors.text};
+  border-radius: ${props => props.theme.borderRadius.sm};
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  
+  &:hover {
+    opacity: 0.8;
+    transform: translateY(-1px);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
 const AssetDetails = styled.div`
   padding: 1.5rem;
   display: grid;
@@ -218,6 +246,7 @@ const AssetTypes = [
 
 const AssetList = () => {
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(null);
   const [assets, setAssets] = useState([]);
   const [filteredAssets, setFilteredAssets] = useState([]);
   const [filterType, setFilterType] = useState('');
@@ -287,6 +316,27 @@ const AssetList = () => {
       types[asset.type] = (types[asset.type] || 0) + 1;
     });
     return Object.keys(types).length;
+  };
+
+  const handleDeleteAsset = async (assetId, assetName) => {
+    if (!window.confirm(`Are you sure you want to delete "${assetName}"? This action cannot be undone.`)) {
+      return;
+    }
+    
+    try {
+      setDeleting(assetId);
+      await assetService.deleteAsset(assetId);
+      
+      // Remove asset from local state
+      setAssets(prevAssets => prevAssets.filter(asset => asset.id !== assetId));
+      
+      toast.success(`"${assetName}" has been deleted successfully`);
+    } catch (error) {
+      console.error('Failed to delete asset:', error);
+      toast.error('Failed to delete asset. Please try again.');
+    } finally {
+      setDeleting(null);
+    }
   };
 
   if (loading) {
@@ -377,6 +427,15 @@ const AssetList = () => {
                 <AssetInfo>
                   <AssetName>{asset.name}</AssetName>
                   <AssetType>{formatAssetType(asset.type)}</AssetType>
+                  <AssetActions>
+                    <ActionButton
+                      variant="danger"
+                      onClick={() => handleDeleteAsset(asset.id, asset.name)}
+                      disabled={deleting === asset.id}
+                    >
+                      {deleting === asset.id ? 'Deleting...' : '🗑️ Delete'}
+                    </ActionButton>
+                  </AssetActions>
                 </AssetInfo>
                 <AssetValue>{formatCurrency(asset.value)}</AssetValue>
               </AssetHeader>

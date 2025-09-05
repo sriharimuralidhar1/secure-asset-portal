@@ -163,6 +163,32 @@ const AssetValue = styled.span`
   color: ${props => props.theme.colors.text};
 `;
 
+const AssetActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+`;
+
+const DeleteButton = styled.button`
+  padding: 0.25rem 0.5rem;
+  background: ${props => props.theme.colors.error};
+  color: white;
+  border: none;
+  border-radius: ${props => props.theme.borderRadius.sm};
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  
+  &:hover {
+    opacity: 0.8;
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
 const CategoryList = styled.div`
   display: flex;
   flex-direction: column;
@@ -223,10 +249,11 @@ const LoadingState = styled.div`
 `;
 
 const Dashboard = () => {
+  const { user, logout } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(null);
   const [assets, setAssets] = useState([]);
   const [portfolioSummary, setPortfolioSummary] = useState(null);
-  const { user, logout } = useAuth();
 
   useEffect(() => {
     loadDashboardData();
@@ -264,6 +291,30 @@ const Dashboard = () => {
 
   const formatAssetType = (type) => {
     return type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  const handleDeleteAsset = async (assetId, assetName) => {
+    if (!window.confirm(`Are you sure you want to delete "${assetName}"? This action cannot be undone.`)) {
+      return;
+    }
+    
+    try {
+      setDeleting(assetId);
+      await assetService.deleteAsset(assetId);
+      
+      // Remove asset from local state and refresh data
+      setAssets(prevAssets => prevAssets.filter(asset => asset.id !== assetId));
+      
+      // Refresh portfolio summary
+      loadPortfolioData();
+      
+      toast.success(`"${assetName}" has been deleted successfully`);
+    } catch (error) {
+      console.error('Failed to delete asset:', error);
+      toast.error('Failed to delete asset. Please try again.');
+    } finally {
+      setDeleting(null);
+    }
   };
 
   if (loading) {
@@ -328,7 +379,15 @@ const Dashboard = () => {
                       <AssetName>{asset.name}</AssetName>
                       <AssetType>{formatAssetType(asset.type)}</AssetType>
                     </AssetInfo>
-                    <AssetValue>{formatCurrency(asset.value)}</AssetValue>
+                    <AssetActions>
+                      <AssetValue>{formatCurrency(asset.value)}</AssetValue>
+                      <DeleteButton
+                        onClick={() => handleDeleteAsset(asset.id, asset.name)}
+                        disabled={deleting === asset.id}
+                      >
+                        {deleting === asset.id ? '...' : '🗑️'}
+                      </DeleteButton>
+                    </AssetActions>
                   </AssetItem>
                 ))}
                 {assets.length > 5 && (
