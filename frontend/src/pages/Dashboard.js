@@ -280,7 +280,7 @@ const Dashboard = () => {
     <DashboardContainer>
       <Header>
         <HeaderContent>
-          <Title>Welcome back, {user?.firstName}</Title>
+          <Title>Welcome back, {user?.firstName} {user?.lastName}</Title>
           <Subtitle>Here's an overview of your financial portfolio</Subtitle>
         </HeaderContent>
         <LogoutButton onClick={handleLogout}>

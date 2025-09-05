@@ -4,13 +4,24 @@ const jwt = require('jsonwebtoken');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const { body, validationResult } = require('express-validator');
-const { 
-  generateRegistrationOptions, 
-  verifyRegistrationResponse, 
-  generateAuthenticationOptions, 
-  verifyAuthenticationResponse 
-} = require('@simplewebauthn/server');
-const { findUser, addUser, updateUser, addAuditLog, findPasskeys, addPasskey, updatePasskey } = require('../data/mockDatabase');
+const { Fido2Lib } = require('fido2-lib');
+
+// Initialize Fido2Lib
+const fido2 = new Fido2Lib({
+  timeout: 60000,
+  rpId: process.env.NODE_ENV === 'production' 
+    ? process.env.WEBAUTHN_RP_ID || 'secure-asset-portal.com' 
+    : 'localhost',
+  rpName: 'Secure Asset Portal',
+  rpIcon: 'https://example.com/logo.png',
+  challengeSize: 128,
+  attestation: "none",
+  cryptoParams: [-7, -35, -36, -257, -258, -259, -37, -38, -39, -8],
+  authenticatorAttachment: "platform",
+  authenticatorRequireResidentKey: true,
+  authenticatorUserVerification: "required"
+});
+const { findUser, addUser, updateUser, addAuditLog, findPasskeys, addPasskey, updatePasskey, mockDatabase } = require('../data/mockDatabase');
 const emailService = require('../services/emailService');
 const router = express.Router();
 
@@ -202,6 +213,8 @@ router.post('/login', validateLogin, async (req, res) => {
       { 
         userId: user.id, 
         email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
         role: 'user'
       },
       process.env.JWT_SECRET || 'fallback-secret-key',
@@ -306,42 +319,78 @@ router.post('/passkey/register/begin', async (req, res) => {
 
     // Get existing passkeys for this user
     const existingPasskeys = findPasskeys({ userId: user.id });
+    console.log('🔑 Existing passkeys count:', existingPasskeys.length);
 
-    console.log('🔧 Generating passkey registration options...');
-    console.log('RP Name:', rpName);
-    console.log('RP ID:', rpID);
-    console.log('User Display Name:', `${user.firstName} ${user.lastName}`);
+    const excludeCredentials = existingPasskeys.map(passkey => ({
+      id: passkey.credentialId,
+      type: 'public-key',
+      transports: passkey.transports || ['internal']
+    }));
+
+    console.log('🔧 Generating passkey registration options with fido2-lib...');
     
-    const options = await generateRegistrationOptions({
-      rpName,
-      rpID,
-      userName: user.email,
-      userID: new TextEncoder().encode(user.id),
-      userDisplayName: `${user.firstName} ${user.lastName}`,
-      // Exclude existing passkeys
-      excludeCredentials: existingPasskeys.map(passkey => ({
-        id: new Uint8Array(Buffer.from(passkey.credentialId, 'base64url')),
-        type: 'public-key',
-        transports: passkey.transports || ['internal', 'hybrid']
-      })),
-      authenticatorSelection: {
-        residentKey: 'preferred',
-        userVerification: 'preferred',
-        authenticatorAttachment: 'platform' // Prefer platform authenticators (TouchID, FaceID, Windows Hello)
+    const registrationOptions = await fido2.attestationOptions();
+    console.log('🔍 Raw fido2-lib options:', JSON.stringify(registrationOptions, null, 2));
+    console.log('🔍 Challenge type:', typeof registrationOptions.challenge);
+    console.log('🔍 Challenge value:', registrationOptions.challenge);
+    
+    // Convert challenge to base64url (handle ArrayBuffer and Buffer)
+    let challenge;
+    if (registrationOptions.challenge instanceof ArrayBuffer) {
+      challenge = Buffer.from(registrationOptions.challenge).toString('base64url');
+    } else if (Buffer.isBuffer(registrationOptions.challenge)) {
+      challenge = registrationOptions.challenge.toString('base64url');
+    } else {
+      challenge = registrationOptions.challenge;
+    }
+    
+    console.log('🔍 Converted challenge:', challenge);
+    
+    // Customize the options for our use case
+    const customOptions = {
+      challenge: challenge,
+      rp: {
+        name: 'Secure Asset Portal',
+        id: process.env.NODE_ENV === 'production' 
+          ? process.env.WEBAUTHN_RP_ID || 'secure-asset-portal.com' 
+          : 'localhost'
       },
-    });
+      user: {
+        id: Buffer.from(user.id).toString('base64url'),
+        name: user.email,
+        displayName: `${user.firstName} ${user.lastName}`
+      },
+      pubKeyCredParams: [
+        { alg: -7, type: 'public-key' },  // ES256
+        { alg: -257, type: 'public-key' } // RS256
+      ],
+      authenticatorSelection: {
+        authenticatorAttachment: 'platform',
+        residentKey: 'required',
+        requireResidentKey: true,
+        userVerification: 'required'
+      },
+      timeout: 60000,
+      attestation: 'none',
+      excludeCredentials,
+      extensions: {
+        credProps: true
+      }
+    };
     
     console.log('✅ Registration options generated successfully');
-    console.log('Challenge length:', options.challenge.length);
+    console.log('Challenge length:', customOptions.challenge.length);
+    console.log('🔧 Full options object:', JSON.stringify(customOptions, null, 2));
 
     // Store challenge temporarily (in production, use Redis or similar)
-    updateUser(user.id, { currentChallenge: options.challenge });
+    updateUser(user.id, { currentChallenge: customOptions.challenge });
 
-    res.json(options);
+    res.json(customOptions);
   } catch (error) {
     console.error('Passkey registration begin error:', error);
     res.status(500).json({
-      error: 'Failed to begin passkey registration'
+      error: 'Failed to begin passkey registration',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -364,39 +413,88 @@ router.post('/passkey/register/finish', async (req, res) => {
       });
     }
 
-    const verification = await verifyRegistrationResponse({
-      response: credential,
-      expectedChallenge: user.currentChallenge,
-      expectedOrigin: origin,
-      expectedRPID: rpID,
+    const clientDataJSON = JSON.parse(Buffer.from(credential.response.clientDataJSON, 'base64').toString());
+    const attestationObject = credential.response.attestationObject;
+    
+    console.log('🔍 Client data JSON:', clientDataJSON);
+    console.log('🔍 Expected challenge:', user.currentChallenge);
+    console.log('🔍 Received challenge:', clientDataJSON.challenge);
+    
+    // Convert credential data to expected format for fido2-lib (needs ArrayBuffer)
+    const rawIdBuffer = Buffer.from(credential.rawId, 'base64url');
+    const idBuffer = Buffer.from(credential.id, 'base64url');
+    const clientDataJSONBuffer = Buffer.from(credential.response.clientDataJSON, 'base64');
+    const attestationObjectBuffer = Buffer.from(credential.response.attestationObject, 'base64');
+    
+    const processedCredential = {
+      ...credential,
+      rawId: new Uint8Array(rawIdBuffer).buffer,
+      id: new Uint8Array(idBuffer).buffer,
+      response: {
+        ...credential.response,
+        clientDataJSON: new Uint8Array(clientDataJSONBuffer).buffer,
+        attestationObject: new Uint8Array(attestationObjectBuffer).buffer
+      }
+    };
+    
+    console.log('🔧 Processed credential for fido2-lib:', {
+      rawIdType: typeof processedCredential.rawId,
+      rawIdIsArrayBuffer: processedCredential.rawId instanceof ArrayBuffer,
+      idType: typeof processedCredential.id,
+      idIsArrayBuffer: processedCredential.id instanceof ArrayBuffer,
+      clientDataJSONType: typeof processedCredential.response.clientDataJSON,
+      clientDataJSONIsArrayBuffer: processedCredential.response.clientDataJSON instanceof ArrayBuffer,
+      attestationObjectType: typeof processedCredential.response.attestationObject,
+      attestationObjectIsArrayBuffer: processedCredential.response.attestationObject instanceof ArrayBuffer
+    });
+    
+    const attestationExpectations = {
+      challenge: user.currentChallenge,
+      origin: origin,
+      factor: "either"
+    };
+
+    console.log('🔧 Verifying attestation with fido2-lib...');
+    const regResult = await fido2.attestationResult(processedCredential, attestationExpectations);
+    
+    console.log('🔖 Attestation result:', {
+      verified: !!regResult.authnrData,
+      counter: regResult.authnrData?.get('counter'),
+      credentialId: regResult.authnrData?.get('credId')?.toString('base64url')
     });
 
-    if (!verification.verified) {
+    if (!regResult.authnrData) {
       return res.status(400).json({
         error: 'Passkey registration failed',
         message: 'Could not verify passkey'
       });
     }
-
-    console.log('🔖 Verification info:', {
-      credentialID: verification.registrationInfo.credentialID ? 'present' : 'missing',
-      credentialPublicKey: verification.registrationInfo.credentialPublicKey ? 'present' : 'missing'
-    });
     
-    // Store the passkey
+    // Extract credential data from fido2-lib result
+    const credIdBuffer = regResult.authnrData.get('credId');
+    const credentialId = Buffer.from(credIdBuffer).toString('base64url');
+    const credentialPublicKey = regResult.authnrData.get('credentialPublicKeyPem');
+    const counter = regResult.authnrData.get('counter');
+    
+    console.log('🔑 Credential ID:', credentialId.substring(0, 10) + '...');
+    console.log('🔑 Public Key present:', !!credentialPublicKey);
+    console.log('🔑 Counter:', counter);
+    
     const passkey = addPasskey({
       userId: user.id,
-      credentialId: verification.registrationInfo.credentialID 
-        ? Buffer.from(verification.registrationInfo.credentialID).toString('base64url')
-        : 'fallback-' + Date.now(),
-      credentialPublicKey: verification.registrationInfo.credentialPublicKey
-        ? Buffer.from(verification.registrationInfo.credentialPublicKey).toString('base64')
-        : '',
-      counter: verification.registrationInfo.counter || 0,
-      credentialDeviceType: verification.registrationInfo.credentialDeviceType || 'singleDevice',
-      credentialBackedUp: verification.registrationInfo.credentialBackedUp || false,
-      transports: credential.response?.transports || ['internal', 'hybrid'],
-      name: `${user.firstName}'s ${verification.registrationInfo.credentialDeviceType === 'multiDevice' ? 'Security Key' : 'Device'}`,
+      credentialId: credentialId,
+      credentialPublicKey: credentialPublicKey || '',
+      counter: counter || 0,
+      credentialDeviceType: 'singleDevice',
+      credentialBackedUp: false,
+      transports: credential.response?.transports || ['internal'],
+      name: `${user.firstName}'s Device - ${new Date().toLocaleString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      })}`,
       lastUsed: new Date().toISOString()
     });
     
@@ -423,9 +521,14 @@ router.post('/passkey/register/finish', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Passkey registration finish error:', error);
+    console.error('❌ Passkey registration finish error:', error);
+    console.error('❌ Error name:', error.name);
+    console.error('❌ Error message:', error.message);
+    console.error('❌ Error stack:', error.stack);
+    
     res.status(500).json({
-      error: 'Failed to complete passkey registration'
+      error: 'Failed to complete passkey registration',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -435,6 +538,7 @@ router.post('/passkey/authenticate/begin', async (req, res) => {
   try {
     const { email } = req.body;
     console.log('🔍 Passkey auth begin for email:', email);
+    console.log('🔍 Current passkeys in database:', mockDatabase.passkeys.length);
 
     // If email provided, find user's passkeys
     let allowCredentials = [];
@@ -450,26 +554,13 @@ router.post('/passkey/authenticate/begin', async (req, res) => {
             message: 'You need to register a passkey first before you can authenticate with one'
           });
         }
-        allowCredentials = userPasskeys.map(passkey => {
-          // Handle both string and buffer credential IDs safely
-          let credentialIdBuffer;
-          try {
-            if (passkey.credentialId.startsWith('fallback-')) {
-              // Skip fallback credentials
-              return null;
-            }
-            credentialIdBuffer = Buffer.from(passkey.credentialId, 'base64url');
-          } catch (error) {
-            console.warn('⚠️  Skipping invalid credential ID:', passkey.credentialId);
-            return null;
-          }
-          
-          return {
-            id: new Uint8Array(credentialIdBuffer),
-            type: 'public-key',
-            transports: passkey.transports || ['internal', 'hybrid']
-          };
-        }).filter(Boolean); // Remove null entries
+        allowCredentials = userPasskeys.map(passkey => ({
+          id: passkey.credentialId,
+          type: 'public-key',
+          transports: passkey.transports || ['internal']
+        }));
+        
+        console.log('📋 Allow credentials count:', allowCredentials.length);
       } else {
         return res.status(404).json({
           error: 'User not found',
@@ -478,23 +569,50 @@ router.post('/passkey/authenticate/begin', async (req, res) => {
       }
     }
 
-    const options = await generateAuthenticationOptions({
-      rpID,
-      allowCredentials,
+    console.log('🔧 Generating authentication options with fido2-lib...');
+    const assertionOptions = await fido2.assertionOptions();
+    
+    // Convert challenge to base64url (handle ArrayBuffer and Buffer)
+    let challenge;
+    if (assertionOptions.challenge instanceof ArrayBuffer) {
+      challenge = Buffer.from(assertionOptions.challenge).toString('base64url');
+    } else if (Buffer.isBuffer(assertionOptions.challenge)) {
+      challenge = assertionOptions.challenge.toString('base64url');
+    } else {
+      challenge = assertionOptions.challenge;
+    }
+    
+    // Customize the options for our use case
+    const customOptions = {
+      challenge: challenge,
+      timeout: 60000,
+      rpId: process.env.NODE_ENV === 'production' 
+        ? process.env.WEBAUTHN_RP_ID || 'secure-asset-portal.com' 
+        : 'localhost',
       userVerification: 'preferred',
-    });
+      // Don't include allowCredentials for discoverable authentication
+      // but store them for potential fallback
+      ...(allowCredentials.length > 0 && { _fallbackCredentials: allowCredentials })
+    };
+    
+    console.log('📄 Generated auth options:');
+    console.log('  - Challenge length:', customOptions.challenge.length);
+    console.log('  - User verification:', customOptions.userVerification);
+    console.log('  - Timeout:', customOptions.timeout);
+    console.log('🔍 Full options object sent to frontend:', JSON.stringify(customOptions, null, 2));
 
     // Store challenge temporarily - we'll use email as key if provided, otherwise store globally
     const challengeKey = email || 'anonymous';
     // In production, store this in Redis with expiration
     req.app.locals.authChallenges = req.app.locals.authChallenges || {};
-    req.app.locals.authChallenges[challengeKey] = options.challenge;
+    req.app.locals.authChallenges[challengeKey] = customOptions.challenge;
 
-    res.json(options);
+    res.json(customOptions);
   } catch (error) {
     console.error('Passkey authentication begin error:', error);
     res.status(500).json({
-      error: 'Failed to begin passkey authentication'
+      error: 'Failed to begin passkey authentication',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -504,7 +622,9 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
   try {
     const { email, credential } = req.body;
     console.log('🔍 Passkey auth finish for email:', email);
-    console.log('🔑 Credential ID length:', credential?.rawId?.length);
+    console.log('🔑 Credential received:', !!credential);
+    console.log('🔑 Full credential structure:');
+    console.log(JSON.stringify(credential, null, 2));
 
     // Get challenge
     const challengeKey = email || 'anonymous';
@@ -519,15 +639,39 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
       });
     }
 
-    // Find the passkey
-    const credentialId = Buffer.from(credential.rawId, 'base64url').toString('base64url');
-    console.log('🔍 Looking for credential ID:', credentialId.substring(0, 10) + '...');
-    const passkeys = findPasskeys({ credentialId });
-    console.log('🔑 Passkeys found:', passkeys.length);
-    const passkey = passkeys[0];
+    // Find the passkey by credential ID
+    // The browser sends credential.id as a base64url string, which should match our stored credentialId
+    const browserCredentialId = credential.id; // Use credential.id instead of rawId for string matching
+    console.log('🔍 Browser credential ID:', browserCredentialId.substring(0, 10) + '...');
+    
+    let passkey = null;
+    const passkeys = findPasskeys({ credentialId: browserCredentialId });
+    console.log('🔑 Passkeys found by exact credential ID:', passkeys.length);
+    
+    if (passkeys.length === 0 && email) {
+      // Fallback: look for any passkey for this user
+      console.log('🔄 Fallback: Looking for any passkey for user email:', email);
+      const user = findUser({ email });
+      if (user) {
+        const userPasskeys = findPasskeys({ userId: user.id });
+        console.log('🔑 User passkeys found:', userPasskeys.length);
+        if (userPasskeys.length > 0) {
+          passkey = userPasskeys.find(pk => pk.credentialId === browserCredentialId);
+          if (!passkey) {
+            passkey = userPasskeys.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+            console.log('⚠️  No exact credential match, using most recent passkey:', passkey.id);
+          } else {
+            console.log('✅ Found exact credential match:', passkey.id);
+          }
+        }
+      }
+    } else {
+      passkey = passkeys[0];
+      console.log('✅ Found passkey by credential ID:', passkey.id);
+    }
 
     if (!passkey) {
-      console.error('❌ Passkey not found for credential ID:', credentialId.substring(0, 10) + '...');
+      console.error('❌ Passkey not found for credential ID:', browserCredentialId.substring(0, 10) + '...');
       return res.status(400).json({
         error: 'Passkey not found',
         message: 'This passkey is not registered with any account'
@@ -541,28 +685,78 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
       });
     }
 
-    const verification = await verifyAuthenticationResponse({
-      response: credential,
-      expectedChallenge,
-      expectedOrigin: origin,
-      expectedRPID: rpID,
-      authenticator: {
-        credentialID: new Uint8Array(Buffer.from(passkey.credentialId, 'base64url')),
-        credentialPublicKey: new Uint8Array(Buffer.from(passkey.credentialPublicKey, 'base64')),
-        counter: passkey.counter,
-        transports: passkey.transports
-      },
+    console.log('🔍 Passkey details:');
+    console.log('  - ID:', passkey.id);
+    console.log('  - User ID:', passkey.userId);
+    console.log('  - Counter:', passkey.counter);
+    console.log('  - Public Key present:', !!passkey.credentialPublicKey);
+    
+    // Convert credential data to expected format for fido2-lib (needs ArrayBuffer)
+    const rawIdBuffer = Buffer.from(credential.rawId, 'base64url');
+    const idBuffer = Buffer.from(credential.id, 'base64url');
+    const clientDataJSONBuffer = Buffer.from(credential.response.clientDataJSON, 'base64');
+    const authenticatorDataBuffer = Buffer.from(credential.response.authenticatorData, 'base64');
+    const signatureBuffer = Buffer.from(credential.response.signature, 'base64');
+    const userHandleBuffer = credential.response.userHandle ? Buffer.from(credential.response.userHandle, 'base64') : null;
+    
+    const processedCredential = {
+      ...credential,
+      rawId: new Uint8Array(rawIdBuffer).buffer,
+      id: new Uint8Array(idBuffer).buffer,
+      response: {
+        ...credential.response,
+        clientDataJSON: new Uint8Array(clientDataJSONBuffer).buffer,
+        authenticatorData: new Uint8Array(authenticatorDataBuffer).buffer,
+        signature: new Uint8Array(signatureBuffer).buffer,
+        userHandle: userHandleBuffer ? new Uint8Array(userHandleBuffer).buffer : null
+      }
+    };
+    
+    console.log('🔧 Processed auth credential for fido2-lib:', {
+      rawIdType: typeof processedCredential.rawId,
+      rawIdIsArrayBuffer: processedCredential.rawId instanceof ArrayBuffer,
+      idType: typeof processedCredential.id,
+      idIsArrayBuffer: processedCredential.id instanceof ArrayBuffer,
+      clientDataJSONType: typeof processedCredential.response.clientDataJSON,
+      clientDataJSONIsArrayBuffer: processedCredential.response.clientDataJSON instanceof ArrayBuffer,
+      authenticatorDataType: typeof processedCredential.response.authenticatorData,
+      authenticatorDataIsArrayBuffer: processedCredential.response.authenticatorData instanceof ArrayBuffer,
+      signatureType: typeof processedCredential.response.signature,
+      signatureIsArrayBuffer: processedCredential.response.signature instanceof ArrayBuffer,
+      userHandleType: typeof processedCredential.response.userHandle,
+      userHandleIsArrayBuffer: processedCredential.response.userHandle instanceof ArrayBuffer
     });
 
-    if (!verification.verified) {
+    // Prepare assertion expectations for fido2-lib
+    const assertionExpectations = {
+      challenge: expectedChallenge,
+      origin: origin,
+      factor: "either",
+      publicKey: passkey.credentialPublicKey, // PEM format from registration
+      prevCounter: passkey.counter || 0,
+      userHandle: Buffer.from(user.id).toString('base64url')
+    };
+
+    console.log('🔧 Verifying assertion with fido2-lib...');
+    const authResult = await fido2.assertionResult(processedCredential, assertionExpectations);
+    
+    console.log('🔖 Assertion result:', {
+      verified: !!authResult.authnrData,
+      counter: authResult.authnrData?.get('counter')
+    });
+
+    if (!authResult.authnrData) {
       return res.status(401).json({
-        error: 'Passkey authentication failed'
+        error: 'Passkey authentication failed',
+        message: 'The passkey signature could not be verified'
       });
     }
 
+    const newCounter = authResult.authnrData.get('counter');
+    
     // Update passkey counter and last used
     updatePasskey(passkey.id, {
-      counter: verification.authenticationInfo.newCounter,
+      counter: newCounter || (passkey.counter + 1),
       lastUsed: new Date().toISOString()
     });
 
@@ -586,12 +780,16 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
       { 
         userId: user.id, 
         email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
         role: 'user',
         authMethod: 'passkey'
       },
       process.env.JWT_SECRET || 'fallback-secret-key',
       { expiresIn: '24h' }
     );
+
+    console.log('✅ Passkey authentication successful for user:', user.email);
 
     res.json({
       message: 'Passkey authentication successful',
@@ -605,9 +803,14 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Passkey authentication finish error:', error);
+    console.error('❌ Passkey authentication finish error:', error);
+    console.error('❌ Error name:', error.name);
+    console.error('❌ Error message:', error.message);
+    console.error('❌ Error stack:', error.stack);
+    
     res.status(500).json({
-      error: 'Failed to complete passkey authentication'
+      error: 'Failed to complete passkey authentication',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

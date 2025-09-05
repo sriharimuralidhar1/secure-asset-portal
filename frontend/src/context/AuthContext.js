@@ -60,6 +60,17 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const passkeyLogin = async (email, credential) => {
+    try {
+      const response = await authService.finishPasskeyAuthentication(email, credential);
+      localStorage.setItem('token', response.token);
+      setUser(response.user);
+      return { success: true, user: response.user };
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     setUser(null);
@@ -71,6 +82,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     register,
+    passkeyLogin,
     logout
   };
 

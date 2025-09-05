@@ -10,7 +10,7 @@ const mockDatabase = {
 };
 
 // Clear everything on startup
-console.log('🗑️ BRAVE CLEAN TEST: Fresh database ready for passkey testing');
+console.log('🗑️ FRESH START: Database cleared and ready for testing');
 
 // Clear database function for testing
 const clearDatabase = () => {
@@ -245,3 +245,6 @@ module.exports = {
   // Utility
   generateId
 };
+
+// Clear database on module load for fresh testing
+clearDatabase();

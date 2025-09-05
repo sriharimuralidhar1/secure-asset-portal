@@ -37,11 +37,15 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Stricter rate limiting for auth endpoints
+// Relaxed rate limiting for auth endpoints (passkey registration needs multiple requests)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5, // limit each IP to 5 requests per windowMs for auth
+  max: 20, // increased from 5 to 20 for passkey flows
   message: 'Too many authentication attempts, please try again later.',
+  skip: (req) => {
+    // Skip rate limiting for passkey endpoints during development
+    return req.path.includes('/passkey/');
+  }
 });
 app.use('/api/auth/', authLimiter);
 

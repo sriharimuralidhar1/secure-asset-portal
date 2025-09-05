@@ -51,7 +51,9 @@ export const authService = {
         return {
           id: payload.userId,
           email: payload.email,
-          firstName: payload.firstName || 'User'
+          firstName: payload.firstName || 'User',
+          lastName: payload.lastName || '',
+          twoFactorEnabled: payload.twoFactorEnabled
         };
       }
       throw new Error('Token expired');

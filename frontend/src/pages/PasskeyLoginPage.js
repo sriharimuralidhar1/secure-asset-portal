@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import styled from 'styled-components';
 import toast from 'react-hot-toast';
 import { authService } from '../services/authService';
+import { useAuth } from '../context/AuthContext';
 import { 
   startAuthentication,
   browserSupportsWebAuthn 
@@ -144,6 +145,7 @@ const PasskeyLoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [passkeyCount, setPasskeyCount] = useState(0);
   const navigate = useNavigate();
+  const { passkeyLogin } = useAuth();
 
   const handleEmailSubmit = async (e) => {
     e.preventDefault();
@@ -160,8 +162,33 @@ const PasskeyLoginPage = () => {
       console.log('🔍 Checking passkeys for email:', email);
       const passkeyInfo = await authService.getUserPasskeys(email);
       
+      if (!passkeyInfo.userExists) {
+        toast.error(
+          <div>
+            <strong>No account found for {email}</strong>
+            <br />
+            <a href="/register" style={{color: '#2563eb', textDecoration: 'underline'}}>
+              Click here to create an account
+            </a>
+          </div>,
+          { duration: 6000 }
+        );
+        setStep('email');
+        setLoading(false);
+        return;
+      }
+      
       if (!passkeyInfo.passkeys || passkeyInfo.passkeys.length === 0) {
-        toast.error('No passkeys found for this account. Please set up a passkey first or use password login.');
+        toast.error(
+          <div>
+            <strong>No passkeys found for {email}</strong>
+            <br />
+            <a href="/register" style={{color: '#2563eb', textDecoration: 'underline'}}>
+              Click here to add a passkey to your account
+            </a>
+          </div>,
+          { duration: 6000 }
+        );
         setStep('email');
         setLoading(false);
         return;
@@ -180,7 +207,7 @@ const PasskeyLoginPage = () => {
       
     } catch (error) {
       console.error('Error checking passkeys:', error);
-      toast.error('Failed to check for passkeys. Please try again.');
+      toast.error('No passkeys found. Try another email.', { duration: 4000 });
       setStep('email');
       setLoading(false);
     }
@@ -198,40 +225,122 @@ const PasskeyLoginPage = () => {
       console.log('🚀 Starting passkey authentication for:', email);
       
       // Get authentication options from server
+      console.log('📋 Requesting authentication options from server...');
       const authOptions = await authService.beginPasskeyAuthentication(email);
-      console.log('📋 Authentication options received');
+      console.log('📋 Authentication options received:', authOptions);
+      console.log('📋 Allow credentials count:', authOptions.allowCredentials?.length);
+      
+      // Log credentials info but don't fail if allowCredentials is empty (discoverable flow)
+      if (!authOptions.allowCredentials || authOptions.allowCredentials.length === 0) {
+        console.log('🔍 No specific allowCredentials - trying discoverable authentication');
+      } else {
+        console.log('🔑 Using specific credential IDs for authentication');
+      }
       
       // Start the authentication ceremony
-      console.log('👆 Prompting for biometric authentication...');
-      toast.info('Please use your TouchID/fingerprint when prompted', { duration: 3000 });
+      console.log('👆 About to call startAuthentication...');
+      console.log('👆 Auth options challenge length:', authOptions.challenge?.length);
+      console.log('🔍 Full auth options:', JSON.stringify(authOptions, null, 2));
       
-      const authResult = await startAuthentication(authOptions);
-      console.log('✅ Biometric authentication completed');
+      toast('Please use your TouchID/fingerprint when prompted', { duration: 5000 });
       
-      // Send result to server
-      const loginResult = await authService.finishPasskeyAuthentication(email, authResult);
-      console.log('🎉 Passkey login successful');
+      // Try to authenticate with the specific credential
+      let authResult;
+      try {
+      console.log('🔍 Starting WebAuthn authentication with specific credentials...');
+        console.log('🔑 Credential IDs available:', authOptions.allowCredentials?.length || 0);
+        console.log('🌐 User Agent:', navigator.userAgent);
+        console.log('📱 Platform:', navigator.platform);
+        console.log('🔒 WebAuthn support:', !!window.PublicKeyCredential);
+        
+        // Check if this is Safari
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        console.log('🥀 Is Safari:', isSafari);
+        
+        if (authOptions.allowCredentials && authOptions.allowCredentials.length > 0) {
+          console.log('🔑 Specific credentials to authenticate:', authOptions.allowCredentials.map(c => ({
+            id: c.id.substring(0, 10) + '...',
+            type: c.type,
+            transports: c.transports
+          })));
+        }
+        
+        authResult = await startAuthentication(authOptions);
+        console.log('✅ Authentication successful:', authResult);
+        
+      } catch (authError) {
+        console.error('❌ Authentication failed:', authError.name, authError.message);
+        
+        // Handle specific WebAuthn errors
+        if (authError.name === 'NotAllowedError') {
+          // This usually means user cancelled or no credential found
+          if (authError.message.includes('timed out') || authError.message.includes('not allowed')) {
+            throw new Error('Authentication was cancelled or timed out. Please try again.');
+          } else {
+            throw new Error('No passkey was found or authentication was denied. Please ensure your passkey is properly registered.');
+          }
+        } else if (authError.name === 'NotSupportedError') {
+          throw new Error('Passkeys are not supported on this device or browser.');
+        } else if (authError.name === 'SecurityError') {
+          throw new Error('Security error: Please ensure you are on a secure connection.');
+        } else {
+          throw authError;
+        }
+      }
+      console.log('✅ Biometric authentication completed:', authResult);
+      
+      // Send result to server and update auth context
+      console.log('📤 Sending authentication result to server...');
+      const loginResult = await passkeyLogin(email, authResult);
+      console.log('🎉 Passkey login successful:', loginResult);
       
       toast.success('Successfully signed in with passkey!');
-      
-      // Login successful - store token
-      localStorage.setItem('token', loginResult.token);
-      
-      // Force a page reload to trigger AuthContext to pick up the new token
-      window.location.href = '/dashboard';
       
       // Navigate to dashboard
       navigate('/dashboard');
       
     } catch (error) {
       console.error('❌ Passkey authentication failed:', error);
+      console.error('❌ Error name:', error.name);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error stack:', error.stack);
       
       if (error.name === 'NotAllowedError') {
-        toast.error('Biometric authentication was cancelled or failed');
+        toast.error(
+          <div>
+            <strong>Biometric authentication was cancelled or failed</strong>
+            <br />
+            Please try again or use{' '}
+            <a href="/login" style={{color: '#2563eb', textDecoration: 'underline'}}>
+              password login instead
+            </a>
+          </div>,
+          { duration: 5000 }
+        );
       } else if (error.name === 'AbortError') {
-        toast.error('Authentication timed out');
+        toast.error(
+          <div>
+            <strong>Authentication timed out</strong>
+            <br />
+            Please try again or use{' '}
+            <a href="/login" style={{color: '#2563eb', textDecoration: 'underline'}}>
+              password login instead
+            </a>
+          </div>,
+          { duration: 5000 }
+        );
       } else {
-        toast.error('Passkey authentication failed. Please try again.');
+        toast.error(
+          <div>
+            <strong>Passkey authentication failed</strong>
+            <br />
+            Please try again or use{' '}
+            <a href="/login" style={{color: '#2563eb', textDecoration: 'underline'}}>
+              password login instead
+            </a>
+          </div>,
+          { duration: 5000 }
+        );
       }
       
       setStep('email');
