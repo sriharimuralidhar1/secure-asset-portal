@@ -53,6 +53,7 @@ export const authService = {
           email: payload.email,
           firstName: payload.firstName || 'User',
           lastName: payload.lastName || '',
+          role: payload.role || 'user',
           twoFactorEnabled: payload.twoFactorEnabled
         };
       }

@@ -163,7 +163,7 @@ async function createAdmin() {
       // Update existing user
       await pool.query(
         `UPDATE users 
-         SET password_hash = $1, role = $2, updated_at = CURRENT_TIMESTAMP 
+         SET password = $1, role = $2, updated_at = CURRENT_TIMESTAMP 
          WHERE email = $3`,
         [passwordHash, 'admin', email.toLowerCase()]
       );
@@ -172,8 +172,8 @@ async function createAdmin() {
       // Create new user
       const userId = uuidv4();
       await pool.query(
-        `INSERT INTO users (id, email, first_name, last_name, password_hash, role, email_verified, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        `INSERT INTO users (id, email, first_name, last_name, password, role, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
         [userId, email.toLowerCase(), firstName, lastName, passwordHash, 'admin']
       );
       console.log('✅ Admin account created successfully');
