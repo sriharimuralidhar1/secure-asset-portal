@@ -228,6 +228,7 @@ const AddPasskeyPage = () => {
       console.error('❌ Passkey addition failed:', error);
       console.error('❌ Error name:', error.name);
       console.error('❌ Error message:', error.message);
+      console.error('❌ Error response:', error.response?.data);
       
       if (error.name === 'NotAllowedError') {
         toast.error(
@@ -240,16 +241,25 @@ const AddPasskeyPage = () => {
         );
       } else if (error.name === 'AbortError') {
         toast.error('Registration timed out. Please try again.');
-      } else if (error.message?.includes('not found')) {
-        toast.error('Account not found. Please check your email address.');
-      } else if (error.message?.includes('already registered')) {
-        toast.error('This passkey is already registered to an account.');
-      } else {
+      } else if (error.response?.status === 404 || error.message?.includes('not found')) {
         toast.error(
           <div>
             <strong>Failed to add passkey</strong>
             <br />
-            {error.message || 'Please try again or contact support'}
+            Account not found, Enter the email used when creating the account.
+          </div>,
+          { duration: 6000 }
+        );
+      } else if (error.response?.status === 409 || error.message?.includes('already registered')) {
+        toast.error('This passkey is already registered to an account.');
+      } else {
+        // Check if we have a custom error message from the server
+        const serverMessage = error.response?.data?.message || error.response?.data?.error;
+        toast.error(
+          <div>
+            <strong>Failed to add passkey</strong>
+            <br />
+            {serverMessage || error.message || 'Please try again or contact support'}
           </div>,
           { duration: 5000 }
         );

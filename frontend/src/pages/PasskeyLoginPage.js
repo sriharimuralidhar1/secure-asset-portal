@@ -183,7 +183,7 @@ const PasskeyLoginPage = () => {
           <div>
             <strong>No passkeys found for {email}</strong>
             <br />
-            <a href="/register" style={{color: '#2563eb', textDecoration: 'underline'}}>
+            <a href="/passkey/add" style={{color: '#2563eb', textDecoration: 'underline'}}>
               Click here to add a passkey to your account
             </a>
           </div>,
@@ -207,7 +207,21 @@ const PasskeyLoginPage = () => {
       
     } catch (error) {
       console.error('Error checking passkeys:', error);
-      toast.error('No passkeys found. Try another email.', { duration: 4000 });
+      console.error('Error response:', error.response?.data);
+      
+      if (error.response?.status === 404) {
+        toast.error(
+          <div>
+            <strong>Account not found</strong>
+            <br />
+            Enter the email used when creating the account.
+          </div>,
+          { duration: 5000 }
+        );
+      } else {
+        const serverMessage = error.response?.data?.message || error.response?.data?.error;
+        toast.error(serverMessage || 'No passkeys found. Try another email.', { duration: 4000 });
+      }
       setStep('email');
       setLoading(false);
     }
