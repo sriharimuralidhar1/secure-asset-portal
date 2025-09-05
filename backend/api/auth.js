@@ -512,6 +512,17 @@ router.post('/passkey/register/finish', async (req, res) => {
       details: { passkeyId: passkey.id }
     });
 
+    // Send passkey confirmation email
+    emailService.sendPasskeyConfirmationEmail(user, passkey.name)
+      .then(result => {
+        if (result.success) {
+          console.log(`📧 Passkey confirmation email sent to ${user.email}`);
+        }
+      })
+      .catch(error => {
+        console.error(`❌ Passkey confirmation email error:`, error);
+      });
+
     res.json({
       message: 'Passkey registered successfully',
       passkey: {
@@ -893,6 +904,227 @@ router.get('/passkeys', async (req, res) => {
     console.error('Get passkeys error:', error);
     res.status(500).json({
       error: 'Failed to get passkeys'
+    });
+  }
+});
+
+// Add passkey to existing account - Begin (requires authentication or email verification)
+router.post('/passkey/add/begin', async (req, res) => {
+  try {
+    const { email } = req.body;
+    console.log('🔑 Adding passkey to existing account for email:', email);
+
+    if (!email) {
+      return res.status(400).json({
+        error: 'Email required',
+        message: 'Email address is required to add a passkey'
+      });
+    }
+
+    const user = findUser({ email });
+    console.log('👤 User found:', user ? `Yes (ID: ${user.id})` : 'No');
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'No account found with this email address'
+      });
+    }
+
+    // Get existing passkeys for this user
+    const existingPasskeys = findPasskeys({ userId: user.id });
+    console.log('🔑 Existing passkeys count:', existingPasskeys.length);
+
+    const excludeCredentials = existingPasskeys.map(passkey => ({
+      id: passkey.credentialId,
+      type: 'public-key',
+      transports: passkey.transports || ['internal']
+    }));
+
+    console.log('🔧 Generating passkey registration options for additional passkey...');
+    
+    const registrationOptions = await fido2.attestationOptions();
+    
+    // Convert challenge to base64url (handle ArrayBuffer and Buffer)
+    let challenge;
+    if (registrationOptions.challenge instanceof ArrayBuffer) {
+      challenge = Buffer.from(registrationOptions.challenge).toString('base64url');
+    } else if (Buffer.isBuffer(registrationOptions.challenge)) {
+      challenge = registrationOptions.challenge.toString('base64url');
+    } else {
+      challenge = registrationOptions.challenge;
+    }
+    
+    // Customize the options for adding additional passkey
+    const customOptions = {
+      challenge: challenge,
+      rp: {
+        name: 'Secure Asset Portal',
+        id: process.env.NODE_ENV === 'production' 
+          ? process.env.WEBAUTHN_RP_ID || 'secure-asset-portal.com' 
+          : 'localhost'
+      },
+      user: {
+        id: Buffer.from(user.id).toString('base64url'),
+        name: user.email,
+        displayName: `${user.firstName} ${user.lastName}`
+      },
+      pubKeyCredParams: [
+        { alg: -7, type: 'public-key' },  // ES256
+        { alg: -257, type: 'public-key' } // RS256
+      ],
+      authenticatorSelection: {
+        authenticatorAttachment: 'platform',
+        residentKey: 'required',
+        requireResidentKey: true,
+        userVerification: 'required'
+      },
+      timeout: 60000,
+      attestation: 'none',
+      excludeCredentials,
+      extensions: {
+        credProps: true
+      }
+    };
+    
+    console.log('✅ Additional passkey options generated successfully');
+
+    // Store challenge temporarily
+    updateUser(user.id, { currentChallenge: customOptions.challenge });
+
+    res.json(customOptions);
+  } catch (error) {
+    console.error('Add passkey begin error:', error);
+    res.status(500).json({
+      error: 'Failed to begin adding passkey',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Add passkey to existing account - Finish
+router.post('/passkey/add/finish', async (req, res) => {
+  try {
+    const { email, credential } = req.body;
+    console.log('🔑 Finishing passkey addition for email:', email);
+
+    const user = findUser({ email });
+    if (!user || !user.currentChallenge) {
+      return res.status(400).json({
+        error: 'Invalid session',
+        message: 'Session expired or invalid. Please try again.'
+      });
+    }
+
+    const clientDataJSON = JSON.parse(Buffer.from(credential.response.clientDataJSON, 'base64').toString());
+    
+    console.log('🔍 Expected challenge:', user.currentChallenge);
+    console.log('🔍 Received challenge:', clientDataJSON.challenge);
+    
+    // Convert credential data to expected format for fido2-lib (needs ArrayBuffer)
+    const rawIdBuffer = Buffer.from(credential.rawId, 'base64url');
+    const idBuffer = Buffer.from(credential.id, 'base64url');
+    const clientDataJSONBuffer = Buffer.from(credential.response.clientDataJSON, 'base64');
+    const attestationObjectBuffer = Buffer.from(credential.response.attestationObject, 'base64');
+    
+    const processedCredential = {
+      ...credential,
+      rawId: new Uint8Array(rawIdBuffer).buffer,
+      id: new Uint8Array(idBuffer).buffer,
+      response: {
+        ...credential.response,
+        clientDataJSON: new Uint8Array(clientDataJSONBuffer).buffer,
+        attestationObject: new Uint8Array(attestationObjectBuffer).buffer
+      }
+    };
+    
+    const attestationExpectations = {
+      challenge: user.currentChallenge,
+      origin: origin,
+      factor: "either"
+    };
+
+    console.log('🔧 Verifying additional passkey with fido2-lib...');
+    const regResult = await fido2.attestationResult(processedCredential, attestationExpectations);
+    
+    if (!regResult.authnrData) {
+      return res.status(400).json({
+        error: 'Passkey registration failed',
+        message: 'Could not verify passkey'
+      });
+    }
+    
+    // Extract credential data from fido2-lib result
+    const credIdBuffer = regResult.authnrData.get('credId');
+    const credentialId = Buffer.from(credIdBuffer).toString('base64url');
+    const credentialPublicKey = regResult.authnrData.get('credentialPublicKeyPem');
+    const counter = regResult.authnrData.get('counter');
+    
+    // Check if this passkey already exists
+    const existingPasskey = findPasskeys({ credentialId });
+    if (existingPasskey.length > 0) {
+      return res.status(409).json({
+        error: 'Passkey already registered',
+        message: 'This passkey is already associated with an account'
+      });
+    }
+    
+    const passkey = addPasskey({
+      userId: user.id,
+      credentialId: credentialId,
+      credentialPublicKey: credentialPublicKey || '',
+      counter: counter || 0,
+      credentialDeviceType: 'singleDevice',
+      credentialBackedUp: false,
+      transports: credential.response?.transports || ['internal'],
+      name: `${user.firstName}'s Device - ${new Date().toLocaleString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      })}`,
+      lastUsed: new Date().toISOString()
+    });
+    
+    console.log('✅ Additional passkey stored successfully:', passkey.id);
+
+    // Clear challenge
+    updateUser(user.id, { currentChallenge: null });
+
+    // Log the registration
+    addAuditLog({
+      userId: user.id,
+      action: 'passkey_added',
+      resourceType: 'user',
+      resourceId: user.id,
+      details: { passkeyId: passkey.id }
+    });
+
+    // Send passkey confirmation email
+    emailService.sendPasskeyConfirmationEmail(user, passkey.name)
+      .then(result => {
+        if (result.success) {
+          console.log(`📧 Passkey confirmation email sent to ${user.email}`);
+        }
+      })
+      .catch(error => {
+        console.error(`❌ Passkey confirmation email error:`, error);
+      });
+
+    res.json({
+      message: 'Passkey added successfully',
+      passkey: {
+        id: passkey.id,
+        name: passkey.name,
+        createdAt: passkey.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('❌ Add passkey finish error:', error);
+    
+    res.status(500).json({
+      error: 'Failed to add passkey',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

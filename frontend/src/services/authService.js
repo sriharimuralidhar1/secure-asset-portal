@@ -104,5 +104,21 @@ export const authService = {
   async getUserPasskeys(email) {
     const response = await authAPI.get(`/passkeys/${encodeURIComponent(email)}`);
     return response.data;
+  },
+
+  // Add passkey to existing account methods
+  async beginPasskeyAddition(email) {
+    const response = await authAPI.post('/passkey/add/begin', {
+      email
+    });
+    return response.data;
+  },
+
+  async finishPasskeyAddition(email, credential) {
+    const response = await authAPI.post('/passkey/add/finish', {
+      email,
+      credential
+    });
+    return response.data;
   }
 };

@@ -310,9 +310,14 @@ const LoginPage = () => {
         )}
         
         {!requiresTwoFactor && (
-          <LinkStyled to="/register">
-            Don't have an account? Create one here
-          </LinkStyled>
+          <div>
+            <LinkStyled to="/register">
+              Don't have an account? Create one here
+            </LinkStyled>
+            <LinkStyled to="/passkey/add" style={{ marginTop: '0.5rem' }}>
+              Add passkey to existing account
+            </LinkStyled>
+          </div>
         )}
       </LoginCard>
     </LoginContainer>

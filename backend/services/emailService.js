@@ -401,6 +401,170 @@ If you did not enable 2FA, please contact support immediately.
     return { html, text };
   }
 
+  // Send passkey confirmation email
+  async sendPasskeyConfirmationEmail(user, passkeyName) {
+    const emailContent = this.generatePasskeyConfirmationEmail(user, passkeyName);
+
+    try {
+      if (this.transporter) {
+        const info = await this.transporter.sendMail({
+          from: process.env.FROM_EMAIL || 'Secure Asset Portal <noreply@secure-asset-portal.com>',
+          to: user.email,
+          subject: '🔐 Passkey Added - Your Account is More Secure!',
+          html: emailContent.html,
+          text: emailContent.text,
+          priority: 'high',
+          headers: {
+            'X-Mailer': 'Secure Asset Portal v1.0',
+            'X-Priority': '1'
+          }
+        });
+
+        console.log(`✅ Passkey confirmation email sent successfully!`);
+        console.log(`📧 To: ${user.email}`);
+        console.log(`🔖 Message ID: ${info.messageId}`);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`🔗 Preview URL: ${nodemailer.getTestMessageUrl(info) || 'N/A'}`);
+        }
+
+        return { success: true, messageId: info.messageId };
+      } else {
+        // Fallback: log to console
+        console.log('📧 PASSKEY CONFIRMATION EMAIL WOULD BE SENT TO:', user.email);
+        console.log('Subject: Passkey Added - Your Account is More Secure!');
+        console.log(emailContent.text);
+        return { success: true, messageId: 'console-log' };
+      }
+    } catch (error) {
+      console.error('❌ Failed to send passkey confirmation email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Generate passkey confirmation email content
+  generatePasskeyConfirmationEmail(user, passkeyName) {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Passkey Added Successfully</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #7c3aed; color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #f8fafc; padding: 30px 20px; border-radius: 0 0 8px 8px; }
+            .card { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #7c3aed; }
+            .success-badge { background: #ede9fe; color: #7c3aed; padding: 8px 16px; border-radius: 20px; font-weight: 600; display: inline-block; }
+            .passkey-name { background: #f3f4f6; padding: 10px 15px; border-radius: 6px; font-family: monospace; font-weight: 500; }
+            .security-icon { font-size: 24px; margin-right: 8px; }
+            .footer { text-align: center; color: #6b7280; font-size: 14px; margin-top: 30px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🔐 Passkey Added Successfully!</h1>
+            </div>
+            
+            <div class="content">
+              <h2>Hello ${user.firstName}!</h2>
+              
+              <div class="success-badge">✅ Biometric Security Enabled</div>
+              
+              <p>Excellent! A new passkey has been successfully added to your Secure Asset Portal account. You can now sign in using your biometric authentication.</p>
+              
+              <div class="card">
+                <h3>🆔 Passkey Details</h3>
+                <p><strong>Passkey Name:</strong></p>
+                <div class="passkey-name">${passkeyName}</div>
+                <p><strong>Added:</strong> ${new Date().toLocaleString()}</p>
+                <p><strong>Authentication Method:</strong> TouchID / Fingerprint / Face ID</p>
+              </div>
+
+              <div class="card">
+                <h3>🛡️ Enhanced Security Benefits</h3>
+                <ul>
+                  <li><span class="security-icon">👆</span><strong>Passwordless Login:</strong> Sign in with just your fingerprint or face</li>
+                  <li><span class="security-icon">🔒</span><strong>Phishing Resistant:</strong> Passkeys cannot be stolen or intercepted</li>
+                  <li><span class="security-icon">⚡</span><strong>Faster Access:</strong> No need to type passwords or 2FA codes</li>
+                  <li><span class="security-icon">🌍</span><strong>Cross-Device Sync:</strong> Works across all your Apple/Google devices</li>
+                </ul>
+              </div>
+
+              <div class="card">
+                <h3>📱 How to Sign In with Your Passkey</h3>
+                <ol>
+                  <li>Go to the Secure Asset Portal login page</li>
+                  <li>Click "Sign in with Passkey" or the biometric icon</li>
+                  <li>Enter your email address</li>
+                  <li>Use your TouchID, fingerprint, or Face ID when prompted</li>
+                  <li>You're securely logged in!</li>
+                </ol>
+              </div>
+
+              <div class="card">
+                <h3>🔐 Security Tips</h3>
+                <ul>
+                  <li>Your passkey is stored securely on your device - we never see it</li>
+                  <li>You can add multiple passkeys for different devices</li>
+                  <li>Passkeys work even when offline</li>
+                  <li>If you lose your device, you can still log in with your password</li>
+                </ul>
+              </div>
+
+              <div class="footer">
+                <p>This security notification was sent to ${user.email}.</p>
+                <p>If you did not add this passkey, please secure your account immediately.</p>
+                <p>© ${new Date().getFullYear()} Secure Asset Portal. All rights reserved.</p>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const text = `
+Passkey Added Successfully!
+
+Hello ${user.firstName}!
+
+Excellent! A new passkey has been successfully added to your Secure Asset Portal account. You can now sign in using your biometric authentication.
+
+Passkey Details:
+- Passkey Name: ${passkeyName}
+- Added: ${new Date().toLocaleString()}
+- Authentication Method: TouchID / Fingerprint / Face ID
+
+Enhanced Security Benefits:
+- Passwordless Login: Sign in with just your fingerprint or face
+- Phishing Resistant: Passkeys cannot be stolen or intercepted
+- Faster Access: No need to type passwords or 2FA codes
+- Cross-Device Sync: Works across all your Apple/Google devices
+
+How to Sign In with Your Passkey:
+1. Go to the Secure Asset Portal login page
+2. Click "Sign in with Passkey" or the biometric icon
+3. Enter your email address
+4. Use your TouchID, fingerprint, or Face ID when prompted
+5. You're securely logged in!
+
+Security Tips:
+- Your passkey is stored securely on your device - we never see it
+- You can add multiple passkeys for different devices
+- Passkeys work even when offline
+- If you lose your device, you can still log in with your password
+
+This security notification was sent to ${user.email}.
+If you did not add this passkey, please secure your account immediately.
+
+© ${new Date().getFullYear()} Secure Asset Portal. All rights reserved.
+    `;
+
+    return { html, text };
+  }
+
   // Send password reset email (for future use)
   async sendPasswordResetEmail(user, resetToken) {
     // Implementation for password reset emails
