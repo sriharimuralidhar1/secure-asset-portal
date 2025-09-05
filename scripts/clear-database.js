@@ -115,7 +115,8 @@ async function clearDatabase() {
       console.log(`   🔑 Passkeys: ${afterStats.total_passkeys}`);
       console.log(`   📝 Audit Logs: ${afterStats.total_audit_logs}`);
       
-      console.log('\n🎯 Database is now ready for fresh data!');
+      console.log('\n✅ Database cleared successfully!');
+      console.log('🎯 Database is now ready for fresh data!');
       
     } catch (error) {
       await pool.query('ROLLBACK');

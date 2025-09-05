@@ -752,17 +752,46 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
     });
 
     // Prepare assertion expectations for fido2-lib
+    // In development, we handle counter rollback more gracefully
+    const developmentMode = process.env.NODE_ENV !== 'production';
+    const expectedCounter = developmentMode ? 0 : (passkey.counter || 0);
+    
     const assertionExpectations = {
       challenge: expectedChallenge,
       origin: origin,
       factor: "either",
       publicKey: passkey.credentialPublicKey, // PEM format from registration
-      prevCounter: passkey.counter || 0,
+      prevCounter: expectedCounter,
       userHandle: Buffer.from(user.id).toString('base64url')
     };
 
     console.log('🔧 Verifying assertion with fido2-lib...');
-    const authResult = await fido2.assertionResult(processedCredential, assertionExpectations);
+    console.log('🔧 Expected counter:', expectedCounter, '(development mode:', developmentMode, ')');
+    
+    let authResult;
+    try {
+      authResult = await fido2.assertionResult(processedCredential, assertionExpectations);
+    } catch (error) {
+      if (error.message.includes('counter rollback') && developmentMode) {
+        console.log('⚠️  Counter rollback detected in development mode, attempting recovery...');
+        
+        // In development, try with counter = 0 to handle database resets
+        const recoveryExpectations = {
+          ...assertionExpectations,
+          prevCounter: 0
+        };
+        
+        try {
+          authResult = await fido2.assertionResult(processedCredential, recoveryExpectations);
+          console.log('✅ Counter rollback recovery successful');
+        } catch (recoveryError) {
+          console.error('❌ Counter rollback recovery failed:', recoveryError.message);
+          throw error; // Re-throw original error
+        }
+      } else {
+        throw error; // Re-throw for production or non-counter errors
+      }
+    }
     
     console.log('🔖 Assertion result:', {
       verified: !!authResult.authnrData,
