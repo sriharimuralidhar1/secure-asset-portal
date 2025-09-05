@@ -317,9 +317,6 @@ const LoginPage = () => {
             <LinkStyled to="/passkey/add" style={{ marginTop: '0.5rem' }}>
               Add passkey to existing account
             </LinkStyled>
-            <LinkStyled to="/admin/login" style={{ marginTop: '0.5rem', color: '#dc2626', fontWeight: '600' }}>
-              🔐 Admin Login
-            </LinkStyled>
           </div>
         )}
       </LoginCard>

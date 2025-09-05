@@ -398,34 +398,53 @@ frontend/src/
 - `GET /api/admin/users` - List all users (admin only)
 - `DELETE /api/admin/users/:id` - Delete user account (admin only)
 
-## 🔐 Admin Account Setup
+## 🔐 Account Management (Backend)
 
-**Security Notice**: Admin accounts can only be created by system administrators with direct database access. This functionality is intentionally NOT exposed through the web interface.
+**Security Design**: Admin functionality is handled via backend scripts rather than web interface for enhanced security.
 
-### Creating Admin Accounts
+### Account Management Commands
 
 ```bash
-# Interactive admin creation script (recommended)
+# View all user accounts
+node scripts/view-accounts.js list
+
+# Show database statistics
+node scripts/view-accounts.js stats
+
+# View asset overview by user
+node scripts/view-accounts.js assets
+
+# Show recent user activity
+node scripts/view-accounts.js recent
+
+# List admin users only
+node scripts/view-accounts.js admins
+
+# Promote user to admin
+node scripts/view-accounts.js promote user@example.com
+
+# Demote admin to user
+node scripts/view-accounts.js demote admin@example.com
+```
+
+### Create Admin Account
+
+```bash
+# Interactive admin creation script
 npm run admin:create
 
 # Or run directly
 node scripts/create-admin.js
 ```
 
-### Admin Features
-- 🔐 **Secure Admin Login**: Separate admin login page at `/admin/login`
-- 👥 **User Management**: View and delete user accounts
-- 📊 **Audit Logging**: All admin actions are logged
-- 🛡️ **Role-Based Access**: Only users with `role: 'admin'` can access admin features
-- 🔒 **Same Security**: 2FA and all security features apply to admin accounts
+### Database Access
 
-### Admin Login Process
-1. Navigate to `/admin/login` or click "🔐 Admin Login" from regular login
-2. Enter admin credentials (email/password)
-3. Complete 2FA if enabled
-4. Access admin console at `/admin`
+For direct database management, see [DATABASE_README.md](DATABASE_README.md) for comprehensive commands and queries.
 
-For detailed admin setup instructions, see [ADMIN_SETUP.md](ADMIN_SETUP.md).
+```bash
+# Quick database connection
+psql postgresql://postgres:password123@localhost:5432/secure_asset_portal
+```
 
 ## 📄 License
 
