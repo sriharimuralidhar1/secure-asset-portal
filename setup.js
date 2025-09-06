@@ -64,7 +64,9 @@ async function configureEmail() {
             SMTP_PORT: '587',
             SMTP_SECURE: 'false',
             SMTP_USER: '',
-            SMTP_PASS: ''
+            SMTP_PASS: '',
+            FROM_EMAIL: 'Secure Asset Portal <noreply@example.com>',
+            APP_NAME: 'Secure Asset Portal'
         };
     }
     
@@ -80,24 +82,30 @@ async function configureEmail() {
         log('💡 For Gmail, you\'ll need to:');
         log('   1. Enable 2-Factor Authentication on your Gmail account');
         log('   2. Generate an App Password: https://myaccount.google.com/apppasswords');
-        log('   3. Use the App Password below (not your regular Gmail password)\n');
+        log('   3. When creating the App Password, give it a name (e.g., "My Asset Portal", "Test-portal")');
+        log('   4. Use the App Password below (not your regular Gmail password)\n');
         
         const email = await question('Enter your Gmail address: ');
+        const appPasswordName = await question('Enter the name you gave to your App Password (e.g., "Test-portal"): ');
         const appPassword = await question('Enter your Gmail App Password: ');
         
-        if (email && appPassword) {
-            log('✅ Gmail configuration saved!', 'green');
+        if (email && appPassword && appPasswordName) {
+            const finalAppName = appPasswordName.trim() || 'Secure Asset Portal';
+            log(`✅ Gmail configuration saved! App name: ${finalAppName}`, 'green');
             return {
                 SMTP_HOST: 'smtp.gmail.com',
                 SMTP_PORT: '587',
                 SMTP_SECURE: 'false',
                 SMTP_USER: email,
-                SMTP_PASS: appPassword
+                SMTP_PASS: appPassword,
+                FROM_EMAIL: `${finalAppName} <noreply@${email.split('@')[1]}>`,
+                APP_NAME: finalAppName
             };
         }
     } else if (provider === '2') {
         log('\n📧 Custom SMTP Setup:', 'blue');
         
+        const appName = await question('Enter your application name (e.g., "My Asset Portal"): ');
         const host = await question('SMTP Host (e.g., smtp.yourdomain.com): ');
         const port = await question('SMTP Port (587 for TLS, 465 for SSL): ');
         const secure = await question('Use SSL? (y/n): ');
@@ -105,13 +113,16 @@ async function configureEmail() {
         const pass = await question('SMTP Password: ');
         
         if (host && port && user && pass) {
-            log('✅ Custom SMTP configuration saved!', 'green');
+            const finalAppName = appName.trim() || 'Secure Asset Portal';
+            log(`✅ Custom SMTP configuration saved! App name: ${finalAppName}`, 'green');
             return {
                 SMTP_HOST: host,
                 SMTP_PORT: port,
                 SMTP_SECURE: secure.toLowerCase() === 'y' ? 'true' : 'false',
                 SMTP_USER: user,
-                SMTP_PASS: pass
+                SMTP_PASS: pass,
+                FROM_EMAIL: `${finalAppName} <noreply@${host.replace('smtp.', '')}>`,
+                APP_NAME: finalAppName
             };
         }
     }
@@ -122,7 +133,9 @@ async function configureEmail() {
         SMTP_PORT: '587',
         SMTP_SECURE: 'false',
         SMTP_USER: '',
-        SMTP_PASS: ''
+        SMTP_PASS: '',
+        FROM_EMAIL: 'Secure Asset Portal <noreply@example.com>',
+        APP_NAME: 'Secure Asset Portal'
     };
 }
 
@@ -137,7 +150,7 @@ async function createEnvFile() {
     const jwtSecret = generateSecureKey(32);
     const sessionSecret = generateSecureKey(32);
     
-    // Get email configuration
+    // Get email configuration (includes app name)
     const emailConfig = await configureEmail();
 
     const envContent = `# Auto-generated environment configuration
@@ -160,9 +173,13 @@ JWT_EXPIRES_IN=24h
 BCRYPT_ROUNDS=12
 SESSION_SECRET=${sessionSecret}
 
+# Application Configuration
+APP_NAME=${emailConfig.APP_NAME}
+FROM_EMAIL=${emailConfig.FROM_EMAIL}
+
 # Two-Factor Authentication
-TWO_FACTOR_SERVICE_NAME=Secure Asset Portal
-TWO_FACTOR_ISSUER=Secure Asset Portal
+TWO_FACTOR_SERVICE_NAME=${emailConfig.APP_NAME}
+TWO_FACTOR_ISSUER=${emailConfig.APP_NAME}
 
 # Email Configuration
 SMTP_HOST=${emailConfig.SMTP_HOST}
