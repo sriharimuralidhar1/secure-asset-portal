@@ -245,7 +245,7 @@ const QRInstructions = styled.div`
 const AddPasskeyPage = () => {
   const [step, setStep] = useState('email'); // 'email', 'device-select', 'adding', 'qr-code', 'success'
   const [email, setEmail] = useState('');
-  const [deviceType, setDeviceType] = useState('current'); // 'current' or 'mobile'
+  const [deviceType] = useState('current'); // Always use current device
   const [loading, setLoading] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
@@ -269,13 +269,11 @@ const AddPasskeyPage = () => {
       return;
     }
     
-    setStep('device-select');
+    handleDeviceSelect();
   };
   
-  const handleDeviceSelect = async (selectedDeviceType) => {
-    setDeviceType(selectedDeviceType);
-    
-    if (selectedDeviceType === 'current' && !passkeySupported) {
+  const handleDeviceSelect = async () => {
+    if (!passkeySupported) {
       toast.error('Passkeys are not supported in this browser');
       return;
     }
@@ -292,15 +290,9 @@ const AddPasskeyPage = () => {
       
       setRegistrationOptions(registrationOptions);
       
-      if (selectedDeviceType === 'mobile') {
-        // Generate QR code for cross-device authentication
-        await generateQRCode(registrationOptions);
-        setStep('qr-code');
-      } else {
-        // Use current device
-        setStep('adding');
-        await performPasskeyRegistration(registrationOptions);
-      }
+      // Use current device
+      setStep('adding');
+      await performPasskeyRegistration(registrationOptions);
       
     } catch (error) {
       console.error('❌ Failed to start passkey registration:', error);

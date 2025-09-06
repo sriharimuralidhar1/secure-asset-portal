@@ -9,6 +9,7 @@
     "dev:brave": "concurrently \"npm run dev:backend\" \"npm run dev:frontend:brave\"",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm start",
+    "dev:http": "ENABLE_HTTPS=false FORCE_HTTPS=false concurrently \"npm run dev:backend\" \"cd frontend && HTTPS=false REACT_APP_API_URL=http://localhost:3000/api npm start\"",
     "dev:frontend:brave": "cd frontend && BROWSER=\"Brave Browser\" npm start",
     "start": "npm run start:backend",
     "start:backend": "cd backend && npm start",
