@@ -67,7 +67,22 @@ const addUser = async (userData) => {
     ];
     
     const result = await query(queryText, params);
-    return result.rows[0];
+    const user = result.rows[0];
+    
+    if (!user) return null;
+    
+    // Convert snake_case to camelCase for JavaScript usage
+    return {
+      ...user,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      twoFactorEnabled: user.two_factor_enabled,
+      twoFactorSecret: user.two_factor_secret,
+      lastLogin: user.last_login,
+      currentChallenge: user.current_challenge,
+      createdAt: user.created_at,
+      updatedAt: user.updated_at
+    };
   } catch (error) {
     console.error('❌ Error adding user:', error);
     throw error;
