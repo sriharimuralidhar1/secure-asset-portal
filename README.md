@@ -3,6 +3,8 @@
 > A straightforward financial asset tracker with biometric login - because remembering passwords is annoying.
 
 > ⚡ **Quick start**: Just run `npm run setup && npm run dev` and you're good to go!
+> 📋 **All commands**: See [Available npm Scripts](#available-npm-scripts) for the complete list
+> 🛠️ **Admin tools**: See [Utility Scripts](#utility-scripts) for database management
 
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-18+-blue.svg)](https://reactjs.org/)
@@ -103,6 +105,8 @@ secure-asset-portal/
 ✅ Gets everything talking to each other  
 ✅ Should be ready in about 30 seconds!
 
+> See [**📋 Available npm Scripts**](#available-npm-scripts) for a complete guide to all commands
+
 ### 🧪 Try the Biometric Login
 
 1. **Sign up** at http://localhost:3001/register
@@ -134,20 +138,21 @@ npm run setup
 
 ### Running Tests
 
+For all testing commands, see the [Available npm Scripts](#available-npm-scripts) section. Basic testing:
+
 ```bash
-# Run all tests
-npm test
+npm test                # Run all tests (backend + frontend)
+npm run test:backend    # Jest tests for API only
+npm run test:frontend   # React Testing Library tests only
+```
 
-# Run tests by service
-npm run test:backend   # Jest tests for API
-npm run test:frontend  # React Testing Library tests
-
-# Run individual test suites
+### Individual Test Suites
+```bash
+# Run backend tests directly
 cd backend && npm test
-cd frontend && npm test
 
-# Run tests with coverage
-npm run test:coverage
+# Run frontend tests directly
+cd frontend && npm test
 ```
 
 ### Test Coverage
@@ -183,28 +188,20 @@ NODE_ENV="production"
 
 ### Docker Deployment
 
+For all Docker commands, see the [Available npm Scripts](#available-npm-scripts) section.
+
 ```bash
-# Build and start all services
-npm run docker:up
-
-# Build containers
-npm run docker:build
-
-# View logs
-npm run docker:logs
-
-# Stop services
-npm run docker:down
+npm run docker:up      # Build and start all services
+npm run docker:build   # Build containers
+npm run docker:logs    # View logs
+npm run docker:down    # Stop services
 ```
 
 ### Manual Production Build
 
 ```bash
-# Build both services
-npm run build
-
-# Start production server
-npm start
+npm run build   # Build both services for production
+npm start       # Start production server
 ```
 
 ## 🛡️ Security Features
@@ -234,15 +231,12 @@ npm start
 ## 📝 Development Guidelines
 
 ### Code Quality
+For all available development commands, see the [Available npm Scripts](#available-npm-scripts) section. Key quality tools:
+
 ```bash
-# Lint all code
-npm run lint
-
-# Format all code with Prettier
-npm run format
-
-# Security audit
-npm run security:audit
+npm run lint         # Lint all code
+npm run format       # Format with Prettier
+npm run security:audit   # Security dependency audit
 ```
 
 ### Best Practices
@@ -289,6 +283,171 @@ DEBUG=app:* npm run dev
 # Check API health
 curl http://localhost:3000/api/health
 ```
+
+## 📋 Available npm Scripts
+
+The project includes a comprehensive set of npm scripts to help with development, testing, building, and maintenance tasks.
+
+### Setup and Installation
+
+```bash
+# Run the complete setup process (install dependencies, setup database, etc.)
+npm run setup
+
+# Install dependencies for all packages (root, backend, frontend)
+npm run install:all
+
+# Setup the database schema
+npm run db:setup
+
+# Reset the database (drop, create, and setup schema)
+npm run db:reset
+
+# Create an admin user
+npm run admin:create
+```
+
+### Development
+
+```bash
+# Start both frontend and backend in development mode
+npm run dev
+
+# Start development with Brave browser automatically
+npm run dev:brave
+
+# Start backend only in development mode
+npm run dev:backend
+
+# Start frontend only in development mode
+npm run dev:frontend
+
+# Start frontend with Brave browser
+npm run dev:frontend:brave
+
+# Open the application in Brave browser
+npm run open:brave
+```
+
+### Building and Production
+
+```bash
+# Build both frontend and backend for production
+npm run build
+
+# Build only the backend
+npm run build:backend
+
+# Build only the frontend
+npm run build:frontend
+
+# Start production server (backend only)
+npm start
+
+# Start production backend server explicitly
+npm run start:backend
+```
+
+### Testing
+
+```bash
+# Run all tests (backend and frontend)
+npm test
+
+# Run backend tests only
+npm run test:backend
+
+# Run frontend tests only
+npm run test:frontend
+```
+
+### Docker Operations
+
+```bash
+# Start all services with Docker
+npm run docker:up
+
+# Build Docker containers
+npm run docker:build
+
+# View Docker logs
+npm run docker:logs
+
+# Stop Docker services
+npm run docker:down
+```
+
+### Code Quality
+
+```bash
+# Lint code (backend and frontend)
+npm run lint
+
+# Format code with Prettier
+npm run format
+
+# Run security audit on dependencies
+npm run security:audit
+```
+
+## 🛠️ Utility Scripts
+
+The project includes several Node.js utility scripts in the `/scripts` directory for database management and user administration:
+
+### Account Management
+
+```bash
+# View all user accounts with details
+node scripts/view-accounts.js list
+
+# Show database statistics (users, assets, passkeys, etc.)
+node scripts/view-accounts.js stats
+
+# View asset overview by user
+node scripts/view-accounts.js assets
+
+# View passkey overview by user  
+node scripts/view-accounts.js passkeys
+
+# Show recent activity (last 20 actions)
+node scripts/view-accounts.js recent
+
+# Show help for all view-accounts commands
+node scripts/view-accounts.js help
+```
+
+### Database Management
+
+```bash
+# Delete a specific user account and all their data
+node scripts/delete-account.js user@example.com
+
+# Clear entire database (keeps schema, removes all data)
+node scripts/clear-database.js
+
+# Reset passkey counters (useful after dev database resets)
+node scripts/reset-passkey-counters.js
+```
+
+### Examples
+
+```bash
+# Quick database overview
+node scripts/view-accounts.js stats
+
+# See who has assets
+node scripts/view-accounts.js assets
+
+# Check recent user activity
+node scripts/view-accounts.js recent
+
+# Clean slate for testing
+node scripts/clear-database.js
+```
+
+> **⚠️ Warning**: The `clear-database.js` and `delete-account.js` scripts permanently delete data. Use with caution!
+>
+> **💡 Tip**: These scripts are perfect for development, testing, and database maintenance tasks.
 
 ## 🏢 Architecture
 
@@ -340,11 +499,13 @@ frontend/src/
 
 3. **Setup Development Environment**
    ```bash
-   npm run install:all
-   cp .env.example .env
-   # Configure your .env file
-   npm run db:setup
+   npm run install:all   # Install all dependencies
+   cp .env.example .env  # Create environment file
+   # Configure your .env file with your local settings
+   npm run db:setup      # Setup database schema
    ```
+   
+   See the [Available npm Scripts](#available-npm-scripts) section for more commands.
 
 4. **Make Changes**
    - Write code following existing patterns
@@ -354,10 +515,10 @@ frontend/src/
 
 5. **Test Changes**
    ```bash
-   npm run lint
-   npm run format  
-   npm test
-   npm run security:audit
+   npm run lint           # Check code style
+   npm run format         # Format code
+   npm test               # Run all tests
+   npm run security:audit # Check for vulnerabilities
    ```
 
 6. **Submit Pull Request**
@@ -402,24 +563,7 @@ frontend/src/
 
 **Simple Design**: Pure user portal with backend monitoring scripts for observability.
 
-### Account Monitoring Commands
-
-```bash
-# View all user accounts
-node scripts/view-accounts.js list
-
-# Show database statistics
-node scripts/view-accounts.js stats
-
-# View asset overview by user
-node scripts/view-accounts.js assets
-
-# View passkey overview by user
-node scripts/view-accounts.js passkeys
-
-# Show recent user activity
-node scripts/view-accounts.js recent
-```
+For all account monitoring commands, see the [🛠️ Utility Scripts](#utility-scripts) section above.
 
 ### Database Access
 
