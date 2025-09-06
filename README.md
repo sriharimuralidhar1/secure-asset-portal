@@ -225,7 +225,7 @@ DATABASE_URL="postgresql://user:pass@prod-db:5432/secure_asset_portal"
 # Strong JWT Secret (32+ characters)
 JWT_SECRET="your-production-jwt-secret-very-long-and-secure"
 
-# Production URLs
+# Production URLs (use HTTPS in production)
 FRONTEND_URL="https://yourdomain.com"
 BACKEND_URL="https://api.yourdomain.com"
 
@@ -280,7 +280,7 @@ npm start       # Start production server
 - **UUID Primary Keys**: Enhanced security over sequential IDs
 - **SQL Injection Protection**: Parameterized queries only
 - **XSS Prevention**: Content Security Policy headers
-- **HTTPS Enforcement**: Required in production
+- **HTTPS Ready**: Can be easily configured for production deployment
 
 ## 📝 Development Guidelines
 
@@ -324,25 +324,53 @@ npm run setup
 # Kill conflicting processes, then: npm run dev
 ```
 
+**Frontend Says "Something is already running on port 3000":**
+```bash
+# This happens when frontend tries to use backend's port
+# Check if frontend/.env has PORT=3001:
+cat frontend/.env
+# Should show: PORT=3001
+
+# If missing or wrong, fix it:
+echo "PORT=3001" >> frontend/.env
+# Or re-run setup:
+npm run setup
+```
+
 ### Common Issues
 
 **Development Server Won't Start / Port Conflicts:**
 ```bash
-# Both frontend and backend exit with code 143
+# SYMPTOMS: Both frontend and backend exit with code 143
 # OR "Something is already running on port 3000/3001"
+# OR "npm run dev:frontend exited with code 143"
 
-# Solution: Kill all existing development processes
+# CAUSE: Zombie processes from previous runs still running
+
+# SOLUTION 1: Kill all development processes
 pkill -f "react-scripts"
 pkill -f "nodemon" 
 
-# Force kill if needed
+# SOLUTION 2: If still not working, find and kill specific processes
 ps aux | grep -E "(react-scripts|nodemon)" | grep -v grep
-# Then kill specific PIDs: kill -9 [PID_NUMBER]
+# Look for lines like:
+# sriha  12345  node .../react-scripts start
+# sriha  12346  node .../nodemon server.js
 
-# Verify ports are clear
+# Kill them by PID:
+kill -9 12345 12346
+# Or kill all at once:
+ps aux | grep -E "(react-scripts|nodemon)" | grep -v grep | awk '{print $2}' | xargs kill -9
+
+# SOLUTION 3: Nuclear option - kill everything Node.js
+# (Be careful - this kills ALL Node processes)
+# pkill -f node
+
+# Verify ports are completely clear:
 lsof -i :3000 -i :3001
+# Should return nothing
 
-# Restart cleanly
+# Now restart cleanly:
 npm run dev
 ```
 
@@ -356,26 +384,113 @@ ls -la frontend/.env
 npm run setup
 ```
 
+**React Can't Find index.html / Frontend Won't Start:**
+```bash
+# SYMPTOM: "Could not find a required file. Name: index.html"
+# CAUSE: Missing frontend/public/index.html file
+
+# SOLUTION 1: Re-run setup (creates missing files automatically)
+npm run setup
+
+# SOLUTION 2: Manual verification and creation
+# Check what's missing:
+ls -la frontend/public/
+ls -la frontend/.env
+
+# If frontend/public/ doesn't exist:
+mkdir -p frontend/public
+
+# If frontend/public/index.html is missing, create it:
+cat > frontend/public/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#2563eb" />
+    <title>Secure Asset Portal</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this application.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+EOF
+
+# If frontend/.env is missing (for port configuration):
+cat > frontend/.env << 'EOF'
+BROWSER="Brave Browser"
+PORT=3001
+REACT_APP_API_URL=http://localhost:3000/api
+EOF
+
+# Verify files are created correctly:
+ls -la frontend/public/index.html frontend/.env
+```
+
 **Setup Issues:**
 ```bash
-# If npm run setup fails to create frontend files
+# If npm run setup fails completely
 # Ensure you're in the project root directory
 pwd  # Should show: .../secure-asset-portal
 
-# Re-run setup
-npm run setup
+# Check for permission issues:
+ls -la setup.js  # Should be executable
 
-# Manually verify frontend files were created
-ls -la frontend/public/index.html frontend/.env
+# Re-run setup with more verbose output:
+node setup.js
+
+# If setup hangs on email configuration, press Ctrl+C and try:
+echo "n" | npm run setup  # Skip email setup
+```
+
+**Wrong Directory / Project Structure Issues:**
+```bash
+# SYMPTOM: Setup creates nested directories or files in wrong places
+# CAUSE: Running setup from wrong directory or after git clone issues
+
+# Check your current directory:
+pwd
+# Should show something like: /Users/yourname/secure-asset-portal
+# NOT: /Users/yourname/secure-asset-portal(github)/secure-asset-portal
+
+# Check project structure:
+ls -la
+# Should see: package.json, setup.js, backend/, frontend/, database/
+
+# If you're in a nested directory, go to the correct root:
+cd ..
+# Or find the right directory:
+find /Users -name "setup.js" -path "*/secure-asset-portal/*" 2>/dev/null
+
+# If you have nested directories (like we encountered), use the main one:
+cd /path/to/secure-asset-portal  # NOT the nested one
+npm run setup
+npm run dev
 ```
 
 **Clean Restart Process:**
 ```bash
 # Complete clean restart if having persistent issues
-pkill -f "react-scripts"; pkill -f "nodemon"  # Kill processes
-rm -rf node_modules backend/node_modules frontend/node_modules  # Clean deps
-npm run setup  # Reinstall everything
-npm run dev    # Start fresh
+
+# Step 1: Kill all processes
+pkill -f "react-scripts"; pkill -f "nodemon"
+
+# Step 2: Clean all dependencies
+rm -rf node_modules backend/node_modules frontend/node_modules
+
+# Step 3: Clean package locks (if needed)
+# rm package-lock.json backend/package-lock.json frontend/package-lock.json
+
+# Step 4: Reinstall everything
+npm run setup
+
+# Step 5: Start fresh
+npm run dev
+
+# If still having issues, check you're in the right directory:
+pwd  # Should end with /secure-asset-portal (not nested)
 ```
 
 **Database Connection Issues:**
@@ -387,6 +502,30 @@ pg_isready -h localhost -p 5432
 createdb secure_asset_portal
 ```
 
+**Network Access Issues:**
+```bash
+# SYMPTOM: Can't access app from mobile/other devices on network
+
+# Find your local IP address:
+ifconfig | grep "inet " | grep -v 127.0.0.1
+# Or on macOS: ipconfig getifaddr en0
+# Or: ip route get 1.1.1.1 | awk '{print $7}' (Linux)
+
+# Access from mobile/other devices using your local IP:
+# http://192.168.1.XXX:3001 (replace XXX with your actual IP)
+# Example: http://192.168.68.112:3001
+
+# Make sure both devices are on the same network (WiFi)
+# Check that no firewall is blocking the ports
+
+# Test backend API access:
+# http://192.168.1.XXX:3000/api/health
+
+# Note: App runs on HTTP for development
+# Backend: http://localhost:3000 (or your-ip:3000)
+# Frontend: http://localhost:3001 (or your-ip:3001)
+```
+
 **Email Issues:**
 ```bash
 # If emails show "Name: undefined undefined" or "Invalid Date"
@@ -396,12 +535,24 @@ npm run setup
 
 # Check your .env file has proper values:
 grep -E "(APP_NAME|FROM_EMAIL)" .env
+
+# If Gmail emails aren't working:
+# 1. Check your Gmail App Password is correct
+# 2. Ensure 2FA is enabled on your Gmail account
+# 3. Verify SMTP settings in .env:
+grep SMTP .env
+
+# Test email configuration:
+# Look for "✅ Gmail SMTP connection verified successfully" in logs
+npm run dev:backend | grep -i smtp
 ```
 
 **Passkey Registration Fails:**
-- Ensure you're using HTTPS in production (required for WebAuthn)
+- **Development**: Passkeys work on localhost with HTTP for testing
+- **Production**: HTTPS is required for WebAuthn in production environments  
 - Check browser compatibility (Chrome 67+, Firefox 60+, Safari 14+)
 - Verify `FRONTEND_URL` matches the actual domain
+- For cross-device testing, use your local IP: `http://your-ip:3001`
 
 **Email Notifications Not Working:**
 - Double-check email credentials in `.env`
