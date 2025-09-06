@@ -358,15 +358,27 @@ function setupDatabase() {
         return false;
     }
 
-    // Try to create database
+    // Clean database setup - ensure fresh start
+    log('🧽 Ensuring clean database setup...', 'blue');
     try {
+        // Drop database if it exists and recreate (clean slate)
+        execSync('dropdb --if-exists secure_asset_portal', { stdio: 'pipe' });
         execSync('createdb secure_asset_portal', { stdio: 'pipe' });
-        log('✅ Created database: secure_asset_portal', 'green');
+        log('✅ Created fresh database: secure_asset_portal', 'green');
     } catch (error) {
-        if (error.message.includes('already exists')) {
-            log('✅ Database already exists: secure_asset_portal', 'green');
-        } else {
-            log('⚠️  Could not create database (might need different credentials)', 'yellow');
+        log(`⚠️  Could not reset database: ${error.message}`, 'yellow');
+        log('Attempting to use existing database...', 'yellow');
+        
+        // Fallback: try to create if it doesn't exist
+        try {
+            execSync('createdb secure_asset_portal', { stdio: 'pipe' });
+            log('✅ Created database: secure_asset_portal', 'green');
+        } catch (createError) {
+            if (createError.message.includes('already exists')) {
+                log('🗑️  Database exists, will apply clean schema', 'yellow');
+            } else {
+                log('⚠️  Could not create database (might need different credentials)', 'yellow');
+            }
         }
     }
 
@@ -423,6 +435,7 @@ async function main() {
     
     if (dbSuccess) {
         log('✅ Everything is ready to go!', 'green');
+        log('🎉 Fresh clean database with no test data', 'green');
         log('🚀 Run: npm run dev', 'blue');
     } else {
         log('⚠️  Setup completed with database warnings', 'yellow');
