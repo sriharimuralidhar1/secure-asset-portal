@@ -201,7 +201,7 @@ class EmailService {
                   <li><strong>Asset Tracking:</strong> Monitor all your investments in one place</li>
                   <li><strong>Portfolio Analytics:</strong> Detailed reports and performance insights</li>
                   <li><strong>Bank-Level Security:</strong> End-to-end encryption and audit trails</li>
-                  <li><strong>Mobile Ready:</strong> Access your portfolio anywhere, anytime</li>
+                  <li><strong>Desktop Ready:</strong> Full-featured experience on your computer</li>
                 </ul>
               </div>
 
@@ -245,7 +245,7 @@ Features You'll Love:
 - Asset Tracking: Monitor all your investments in one place
 - Portfolio Analytics: Detailed reports and performance insights  
 - Bank-Level Security: End-to-end encryption and audit trails
-- Mobile Ready: Access your portfolio anywhere, anytime
+- Desktop Ready: Full-featured experience on your computer
 
 This email was sent to ${user.email} because you created an account on Secure Asset Portal.
 If you didn't create this account, please ignore this email.
