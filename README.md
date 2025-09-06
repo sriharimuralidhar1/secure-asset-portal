@@ -97,12 +97,15 @@ secure-asset-portal/
    - App: http://localhost:3001
    - API: http://localhost:3000 (if you're curious)
 
-### ✨ The setup script handles the boring stuff:
+### ✨ The setup script handles everything automatically:
 
-✅ Downloads everything you need  
-✅ Creates config files with random secure keys  
-✅ Sets up the database  
-✅ Gets everything talking to each other  
+✅ **Dependencies**: Downloads and installs all packages  
+✅ **Email Configuration**: Interactive Gmail/SMTP setup with app naming  
+✅ **Security**: Creates random secure keys and certificates  
+✅ **Database**: Sets up PostgreSQL schema automatically  
+✅ **Frontend Files**: Creates React index.html and manifest.json  
+✅ **Port Configuration**: Ensures backend (3000) and frontend (3001) work together  
+✅ **App Branding**: Uses your Gmail App Password name as the application name  
 ✅ Should be ready in about 30 seconds!
 
 > See [**📋 Available npm Scripts**](#available-npm-scripts) for a complete guide to all commands
@@ -115,6 +118,31 @@ secure-asset-portal/
 4. **Log in with your finger/face** next time!
 
 > Works with TouchID, FaceID, Windows Hello, fingerprint readers, and security keys
+
+### 📧 **Email Configuration During Setup**
+
+The setup process includes an interactive email configuration wizard:
+
+**Gmail Setup (Recommended):**
+```bash
+📧 Gmail Setup:
+💡 For Gmail, you'll need to:
+   1. Enable 2-Factor Authentication on your Gmail account
+   2. Generate an App Password: https://myaccount.google.com/apppasswords
+   3. When creating the App Password, give it a name (e.g., "My Asset Portal", "Test-portal")
+   4. Use the App Password below (not your regular Gmail password)
+
+Enter your Gmail address: your-email@gmail.com
+Enter the name you gave to your App Password: Test-portal
+Enter your Gmail App Password: [your-app-password]
+✅ Gmail configuration saved! App name: Test-portal
+```
+
+**The App Password name becomes your application name in:**
+- 📧 **Email sender**: `Test-portal <noreply@gmail.com>`
+- 🏷️ **App branding**: Throughout the application
+- 🔐 **2FA service name**: In authenticator apps
+- 🌐 **Welcome emails**: Personalized with your app name
 
 ### 🔧 Troubleshooting
 
@@ -133,6 +161,32 @@ npm run setup
 **Port conflicts?** Set `PORT=4000` in your `.env`
 
 **Need detailed docs?** See [QUICKSTART.md](QUICKSTART.md)
+
+## 🎆 **Latest Setup Improvements**
+
+### ✨ **New in Latest Version:**
+- **📧 Interactive Email Setup**: Gmail/SMTP configuration with guided prompts
+- **🏷️ Dynamic App Naming**: Uses your Gmail App Password name as application name
+- **🔧 Auto-Fix Frontend**: Creates missing React files (index.html, manifest.json, .env)
+- **🔌 Port Management**: Ensures proper port separation (backend: 3000, frontend: 3001)
+- **⚙️ Process Cleanup**: Enhanced setup handles zombie processes and conflicts
+- **📨 Perfect Emails**: Fixed user data formatting in welcome emails
+
+### 🚀 **Enhanced Setup Experience:**
+```bash
+npm run setup
+# ✅ Installs dependencies
+# ✅ Configures email with your app name
+# ✅ Sets up database
+# ✅ Creates frontend files  
+# ✅ Generates secure keys
+# ✅ Ready to run!
+
+npm run dev
+# ✅ Backend: http://localhost:3000
+# ✅ Frontend: http://localhost:3001
+# ✅ Just works!
+```
 
 ## 🧪 Testing
 
@@ -249,7 +303,80 @@ npm run security:audit   # Security dependency audit
 
 ## 🔧 Troubleshooting
 
+### ⚡ Quick Fixes
+
+**Most Common Issue - Development Server Conflicts:**
+```bash
+# If you see "exit code 143" or port conflicts:
+pkill -f "react-scripts"; pkill -f "nodemon"; npm run dev
+```
+
+**Missing Frontend Files:**
+```bash
+# If React can't find index.html:
+npm run setup
+```
+
+**Port Already In Use:**
+```bash
+# Backend should be on :3000, Frontend on :3001
+# Check what's using ports: lsof -i :3000 -i :3001
+# Kill conflicting processes, then: npm run dev
+```
+
 ### Common Issues
+
+**Development Server Won't Start / Port Conflicts:**
+```bash
+# Both frontend and backend exit with code 143
+# OR "Something is already running on port 3000/3001"
+
+# Solution: Kill all existing development processes
+pkill -f "react-scripts"
+pkill -f "nodemon" 
+
+# Force kill if needed
+ps aux | grep -E "(react-scripts|nodemon)" | grep -v grep
+# Then kill specific PIDs: kill -9 [PID_NUMBER]
+
+# Verify ports are clear
+lsof -i :3000 -i :3001
+
+# Restart cleanly
+npm run dev
+```
+
+**Frontend Starts on Wrong Port:**
+```bash
+# If frontend tries to use port 3000 instead of 3001
+# Check if frontend/.env exists and has PORT=3001
+
+ls -la frontend/.env
+# If missing, run setup again:
+npm run setup
+```
+
+**Setup Issues:**
+```bash
+# If npm run setup fails to create frontend files
+# Ensure you're in the project root directory
+pwd  # Should show: .../secure-asset-portal
+
+# Re-run setup
+npm run setup
+
+# Manually verify frontend files were created
+ls -la frontend/public/index.html frontend/.env
+```
+
+**Clean Restart Process:**
+```bash
+# Complete clean restart if having persistent issues
+pkill -f "react-scripts"; pkill -f "nodemon"  # Kill processes
+rm -rf node_modules backend/node_modules frontend/node_modules  # Clean deps
+npm run setup  # Reinstall everything
+npm run dev    # Start fresh
+```
 
 **Database Connection Issues:**
 ```bash
@@ -258,6 +385,17 @@ pg_isready -h localhost -p 5432
 
 # Create database if it doesn't exist
 createdb secure_asset_portal
+```
+
+**Email Issues:**
+```bash
+# If emails show "Name: undefined undefined" or "Invalid Date"
+# This is fixed in latest version, but if you see it:
+# Re-run setup to update email configuration
+npm run setup
+
+# Check your .env file has proper values:
+grep -E "(APP_NAME|FROM_EMAIL)" .env
 ```
 
 **Passkey Registration Fails:**
