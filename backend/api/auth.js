@@ -23,16 +23,46 @@ const fido2 = new Fido2Lib({
 });
 const { findUser, addUser, updateUser, findPasskeys, addPasskey, updatePasskey, addAuditLog } = require('../data/dataAccess');
 const emailService = require('../services/emailService');
+const { sessionHelpers } = require('../config/redis');
+const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
 // WebAuthn configuration
 const rpName = 'Secure Asset Portal';
-const rpID = process.env.NODE_ENV === 'production' 
-  ? process.env.WEBAUTHN_RP_ID || 'secure-asset-portal.com' 
-  : 'localhost';
-const origin = process.env.NODE_ENV === 'production'
-  ? process.env.FRONTEND_URL || 'https://secure-asset-portal.com'
-  : 'http://localhost:3001';
+
+// Dynamic RP ID and origin handling for cross-device authentication
+const getRpId = (req) => {
+  if (process.env.NODE_ENV === 'production') {
+    return process.env.WEBAUTHN_RP_ID || 'secure-asset-portal.com';
+  }
+  
+  // For development, use the hostname from the request
+  const host = req.get('host') || 'localhost:3001';
+  const hostname = host.split(':')[0];
+  
+  // If it's a local network IP, use 'localhost' as RP ID for compatibility
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || 
+      /^192\.168\.[0-9]{1,3}\.[0-9]{1,3}$/.test(hostname) ||
+      /^10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/.test(hostname) ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\.[0-9]{1,3}\.[0-9]{1,3}$/.test(hostname)) {
+    return 'localhost';
+  }
+  
+  return hostname;
+};
+
+const getOrigin = (req) => {
+  if (process.env.NODE_ENV === 'production') {
+    return process.env.FRONTEND_URL || 'https://secure-asset-portal.com';
+  }
+  
+  // Use the origin from the request for development
+  return req.get('origin') || 'http://localhost:3001';
+};
+
+// Default values for backward compatibility
+const rpID = 'localhost';
+const origin = 'http://localhost:3001';
 
 // Validation middleware
 const validateRegistration = [
@@ -1016,9 +1046,7 @@ router.post('/passkey/add/begin', async (req, res) => {
       challenge: challenge,
       rp: {
         name: 'Secure Asset Portal',
-        id: process.env.NODE_ENV === 'production' 
-          ? process.env.WEBAUTHN_RP_ID || 'secure-asset-portal.com' 
-          : 'localhost'
+        id: getRpId(req)
       },
       user: {
         id: Buffer.from(user.id).toString('base64url'),
@@ -1096,7 +1124,7 @@ router.post('/passkey/add/finish', async (req, res) => {
     
     const attestationExpectations = {
       challenge: user.current_challenge,
-      origin: origin,
+      origin: getOrigin(req),
       factor: "either"
     };
 
@@ -1182,6 +1210,188 @@ router.post('/passkey/add/finish', async (req, res) => {
     res.status(500).json({
       error: 'Failed to add passkey',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Passkey Session Management - for cross-device authentication
+
+// Create passkey session
+router.post('/passkey/session/create', async (req, res) => {
+  try {
+    const { email, options } = req.body;
+    
+    if (!email || !options) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Email and options are required'
+      });
+    }
+    
+    // Verify user exists
+    const user = await findUser({ email });
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'No account found with this email address'
+      });
+    }
+    
+    // Generate session ID
+    const sessionId = uuidv4();
+    
+    // Store session data in Redis
+    await sessionHelpers.storePasskeySession(sessionId, {
+      email,
+      options,
+      userId: user.id,
+      completed: false,
+      success: false
+    });
+    
+    console.log(`📱 Passkey session created: ${sessionId} for ${email}`);
+    
+    res.json({
+      sessionId,
+      message: 'Session created successfully'
+    });
+    
+  } catch (error) {
+    console.error('Create passkey session error:', error);
+    res.status(500).json({
+      error: 'Failed to create session',
+      message: 'Unable to create passkey session'
+    });
+  }
+});
+
+// Get passkey session data
+router.get('/passkey/session/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    
+    if (!sessionId) {
+      return res.status(400).json({
+        error: 'Session ID required',
+        message: 'Please provide a valid session ID'
+      });
+    }
+    
+    const sessionData = await sessionHelpers.getPasskeySession(sessionId);
+    
+    if (!sessionData) {
+      return res.status(404).json({
+        error: 'Session not found',
+        message: 'Session expired or does not exist'
+      });
+    }
+    
+    // Don't expose sensitive internal data
+    const { userId, createdAt, updatedAt, ...publicData } = sessionData;
+    
+    res.json(publicData);
+    
+  } catch (error) {
+    console.error('Get passkey session error:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve session',
+      message: 'Unable to get session data'
+    });
+  }
+});
+
+// Check passkey session status
+router.get('/passkey/session/:sessionId/status', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    
+    if (!sessionId) {
+      return res.status(400).json({
+        error: 'Session ID required',
+        message: 'Please provide a valid session ID'
+      });
+    }
+    
+    const sessionData = await sessionHelpers.getPasskeySession(sessionId);
+    
+    if (!sessionData) {
+      return res.status(404).json({
+        error: 'Session not found',
+        message: 'Session expired or does not exist'
+      });
+    }
+    
+    // Return only status information
+    res.json({
+      completed: sessionData.completed || false,
+      success: sessionData.success || false,
+      error: sessionData.error || null,
+      createdAt: sessionData.createdAt,
+      updatedAt: sessionData.updatedAt
+    });
+    
+  } catch (error) {
+    console.error('Check passkey session status error:', error);
+    res.status(500).json({
+      error: 'Failed to check session status',
+      message: 'Unable to get session status'
+    });
+  }
+});
+
+// Complete passkey session
+router.post('/passkey/session/:sessionId/complete', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { success, error, result } = req.body;
+    
+    if (!sessionId) {
+      return res.status(400).json({
+        error: 'Session ID required',
+        message: 'Please provide a valid session ID'
+      });
+    }
+    
+    const sessionData = await sessionHelpers.getPasskeySession(sessionId);
+    
+    if (!sessionData) {
+      return res.status(404).json({
+        error: 'Session not found',
+        message: 'Session expired or does not exist'
+      });
+    }
+    
+    // Update session with completion data
+    const updatedSession = await sessionHelpers.updatePasskeySession(sessionId, {
+      completed: true,
+      success: success || false,
+      error: error || null,
+      result: result || null
+    });
+    
+    console.log(`📱 Passkey session completed: ${sessionId} (success: ${success})`);
+    
+    // Clean up session after a delay to allow polling to catch the completion
+    setTimeout(async () => {
+      try {
+        await sessionHelpers.deletePasskeySession(sessionId);
+        console.log(`🗑️ Session ${sessionId} cleaned up`);
+      } catch (cleanupError) {
+        console.error('Session cleanup error:', cleanupError);
+      }
+    }, 10000); // 10 second delay
+    
+    res.json({
+      message: 'Session completed successfully',
+      completed: true,
+      success: success || false
+    });
+    
+  } catch (error) {
+    console.error('Complete passkey session error:', error);
+    res.status(500).json({
+      error: 'Failed to complete session',
+      message: 'Unable to update session status'
     });
   }
 });

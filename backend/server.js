@@ -50,11 +50,26 @@ const authLimiter = rateLimit({
 app.use('/api/auth/', authLimiter);
 
 // CORS configuration
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests from localhost, 127.0.0.1, and local network IPs
+    if (!origin || 
+        origin.includes('localhost') || 
+        origin.includes('127.0.0.1') || 
+        /^https?:\/\/192\.168\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]{1,5})?$/.test(origin) ||
+        /^https?:\/\/10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]{1,5})?$/.test(origin) ||
+        /^https?:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]{1,5})?$/.test(origin) ||
+        origin === process.env.FRONTEND_URL) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   optionsSuccessStatus: 200
-}));
+};
+app.use(cors(corsOptions));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -65,6 +80,7 @@ app.use('/api/auth', require('./api/auth'));
 app.use('/api/assets', require('./api/assets'));
 app.use('/api/users', require('./api/users'));
 app.use('/api/reports', require('./api/reports'));
+app.use('/api/', require('./api/network'));
 
 // Initialize database connection
 const { testConnection } = require('./data/database');

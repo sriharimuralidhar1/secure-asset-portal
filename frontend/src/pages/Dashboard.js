@@ -306,7 +306,7 @@ const Dashboard = () => {
       setAssets(prevAssets => prevAssets.filter(asset => asset.id !== assetId));
       
       // Refresh portfolio summary
-      loadPortfolioData();
+      loadDashboardData();
       
       toast.success(`"${assetName}" has been deleted successfully`);
     } catch (error) {

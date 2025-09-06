@@ -7,6 +7,7 @@ import styled, { ThemeProvider } from 'styled-components';
 import LoginPage from './pages/LoginPage';
 import PasskeyLoginPage from './pages/PasskeyLoginPage';
 import AddPasskeyPage from './pages/AddPasskeyPage';
+import MobilePasskeyPage from './pages/MobilePasskeyPage';
 import RegisterPage from './pages/RegisterPage';
 import Dashboard from './pages/Dashboard';
 import AssetList from './pages/AssetList';
@@ -92,6 +93,14 @@ function App() {
                 element={
                   <PublicRoute>
                     <AddPasskeyPage />
+                  </PublicRoute>
+                } 
+              />
+              <Route 
+                path="/passkey/mobile" 
+                element={
+                  <PublicRoute>
+                    <MobilePasskeyPage />
                   </PublicRoute>
                 } 
               />

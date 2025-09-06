@@ -121,5 +121,26 @@ export const authService = {
       credential
     });
     return response.data;
+  },
+
+  // Cross-device passkey session methods
+  async createPasskeySession(sessionData) {
+    const response = await authAPI.post('/passkey/session/create', sessionData);
+    return response.data;
+  },
+
+  async getPasskeySession(sessionId) {
+    const response = await authAPI.get(`/passkey/session/${sessionId}`);
+    return response.data;
+  },
+
+  async checkPasskeySession(sessionId) {
+    const response = await authAPI.get(`/passkey/session/${sessionId}/status`);
+    return response.data;
+  },
+
+  async completePasskeySession(sessionId, result) {
+    const response = await authAPI.post(`/passkey/session/${sessionId}/complete`, result);
+    return response.data;
   }
 };

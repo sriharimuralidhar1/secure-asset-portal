@@ -249,6 +249,8 @@ const AddPasskeyPage = () => {
   const [loading, setLoading] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [qrSessionId, setQrSessionId] = useState(null);
+  const [pollingInterval, setPollingInterval] = useState(null);
   const [registrationOptions, setRegistrationOptions] = useState(null);
   const navigate = useNavigate();
 
@@ -310,28 +312,128 @@ const AddPasskeyPage = () => {
   
   const generateQRCode = async (options) => {
     try {
-      // Create a URL that includes the registration options
-      const qrData = JSON.stringify({
-        type: 'passkey-registration',
+      // Create a session for cross-device authentication via backend
+      const sessionResponse = await authService.createPasskeySession({
         email: email,
-        options: options,
-        redirectUrl: `${window.location.origin}/passkey/add`
+        options: options
       });
       
-      const qrCodeDataUrl = await QRCode.toDataURL(qrData, {
+      const sessionId = sessionResponse.sessionId;
+      
+      // Create a URL that the mobile device can navigate to
+      // Use local network IP for cross-device access when on localhost
+      let qrUrl;
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        // For localhost, we need to get the network accessible URL
+        // This will be provided by the backend or detected client-side
+        const networkUrl = await getNetworkAccessibleUrl();
+        qrUrl = `${networkUrl}/passkey/mobile?session=${sessionId}`;
+      } else {
+        qrUrl = `${window.location.origin}/passkey/mobile?session=${sessionId}`;
+      }
+      
+      const qrCodeDataUrl = await QRCode.toDataURL(qrUrl, {
         width: 300,
         margin: 2,
         color: {
           dark: '#000000',
           light: '#ffffff'
-        }
+        },
+        errorCorrectionLevel: 'M'
       });
       
       setQrCodeUrl(qrCodeDataUrl);
+      setQrSessionId(sessionId);
+      
+      // Start polling for completion
+      startPollingForCompletion(sessionId);
+      
     } catch (error) {
       console.error('❌ Failed to generate QR code:', error);
       toast.error('Failed to generate QR code');
     }
+  };
+  
+  const startPollingForCompletion = (sessionId) => {
+    const interval = setInterval(async () => {
+      try {
+        const sessionStatus = await authService.checkPasskeySession(sessionId);
+        if (sessionStatus.completed) {
+          clearInterval(interval);
+          setPollingInterval(null);
+          
+          if (sessionStatus.success) {
+            setStep('success');
+            toast.success('Passkey added successfully from mobile device!');
+          } else {
+            handleRegistrationError(new Error(sessionStatus.error || 'Mobile registration failed'));
+          }
+        }
+      } catch (error) {
+        // Continue polling on error - session might not be ready yet
+        console.log('Polling error (continuing):', error.message);
+      }
+    }, 2000); // Poll every 2 seconds
+    
+    setPollingInterval(interval);
+    
+    // Clean up after 5 minutes
+    setTimeout(() => {
+      if (interval) {
+        clearInterval(interval);
+        setPollingInterval(null);
+        toast.error('QR code session expired. Please try again.');
+        setStep('device-select');
+      }
+    }, 300000);
+  };
+  
+  React.useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
+  
+  const getNetworkAccessibleUrl = async () => {
+    try {
+      // Try to get network IP from backend
+      const response = await fetch('/api/network-info');
+      if (response.ok) {
+        const data = await response.json();
+        return `http://${data.localIp}:${window.location.port || '3001'}`;
+      }
+    } catch (error) {
+      console.log('Could not get network IP from backend, using fallback');
+    }
+    
+    // Fallback: try to detect via WebRTC
+    return new Promise((resolve) => {
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      pc.createDataChannel('');
+      
+      pc.onicecandidate = (e) => {
+        if (e.candidate && e.candidate.candidate) {
+          const candidate = e.candidate.candidate;
+          const ipMatch = candidate.match(/([0-9]{1,3}(\.[0-9]{1,3}){3})/);
+          if (ipMatch && ipMatch[1] && !ipMatch[1].startsWith('127.')) {
+            pc.close();
+            const port = window.location.port || '3001';
+            resolve(`http://${ipMatch[1]}:${port}`);
+            return;
+          }
+        }
+      };
+      
+      pc.createOffer().then(offer => pc.setLocalDescription(offer));
+      
+      // Fallback timeout
+      setTimeout(() => {
+        pc.close();
+        resolve(window.location.origin); // Use original as last resort
+      }, 3000);
+    });
   };
   
   const performPasskeyRegistration = async (options) => {
@@ -394,76 +496,6 @@ const AddPasskeyPage = () => {
     }
     
     setStep('device-select');
-  };
-
-    try {
-      console.log('🔑 Starting passkey addition process for:', email);
-      
-      // Step 1: Get registration options from server
-      console.log('📋 Requesting registration options from server...');
-      const registrationOptions = await authService.beginPasskeyAddition(email);
-      console.log('📋 Registration options received:', registrationOptions);
-      
-      toast('Please use your TouchID/fingerprint when prompted', { duration: 5000 });
-      
-      // Step 2: Start the registration ceremony
-      console.log('👆 About to call startRegistration...');
-      const attResp = await startRegistration(registrationOptions);
-      console.log('✅ Passkey created successfully:', attResp);
-      
-      // Step 3: Send result to server
-      console.log('📤 Sending registration result to server...');
-      const registrationResult = await authService.finishPasskeyAddition(email, attResp);
-      console.log('🎉 Passkey addition successful:', registrationResult);
-      
-      setStep('success');
-      toast.success('Passkey added successfully! You can now use biometric login.');
-      
-    } catch (error) {
-      console.error('❌ Passkey addition failed:', error);
-      console.error('❌ Error name:', error.name);
-      console.error('❌ Error message:', error.message);
-      console.error('❌ Error response:', error.response?.data);
-      
-      if (error.name === 'NotAllowedError') {
-        toast.error(
-          <div>
-            <strong>Biometric authentication was cancelled</strong>
-            <br />
-            Please try again to add your passkey
-          </div>,
-          { duration: 5000 }
-        );
-      } else if (error.name === 'AbortError') {
-        toast.error('Registration timed out. Please try again.');
-      } else if (error.response?.status === 404 || error.message?.includes('not found')) {
-        toast.error(
-          <div>
-            <strong>Failed to add passkey</strong>
-            <br />
-            Account not found, Enter the email used when creating the account.
-          </div>,
-          { duration: 6000 }
-        );
-      } else if (error.response?.status === 409 || error.message?.includes('already registered')) {
-        toast.error('This passkey is already registered to an account.');
-      } else {
-        // Check if we have a custom error message from the server
-        const serverMessage = error.response?.data?.message || error.response?.data?.error;
-        toast.error(
-          <div>
-            <strong>Failed to add passkey</strong>
-            <br />
-            {serverMessage || error.message || 'Please try again or contact support'}
-          </div>,
-          { duration: 5000 }
-        );
-      }
-      
-      setStep('email');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const renderEmailStep = () => (
