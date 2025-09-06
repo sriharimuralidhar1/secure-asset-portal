@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const crypto = require('crypto');
+const readline = require('readline');
 
 console.log('🛡️  Setting up Secure Asset Portal...\n');
 
@@ -19,6 +20,18 @@ const colors = {
 
 function log(message, color = 'reset') {
     console.log(`${colors[color]}${message}${colors.reset}`);
+}
+
+// Create readline interface for user input
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+function question(prompt) {
+    return new Promise((resolve) => {
+        rl.question(prompt, resolve);
+    });
 }
 
 function generateSecureKey(length = 64) {
@@ -37,7 +50,83 @@ function runCommand(command, description) {
     }
 }
 
-function createEnvFile() {
+async function configureEmail() {
+    log('\n📧 Email Configuration Setup', 'bold');
+    log('Configure email settings to enable notifications and user registration emails.', 'blue');
+    log('You can skip this and use test emails, or set up Gmail/SMTP.\n');
+    
+    const setupEmail = await question('Do you want to configure email settings now? (y/n): ');
+    
+    if (setupEmail.toLowerCase() !== 'y' && setupEmail.toLowerCase() !== 'yes') {
+        log('⏭️  Skipping email configuration. Using test emails (Ethereal).', 'yellow');
+        return {
+            SMTP_HOST: 'smtp.gmail.com',
+            SMTP_PORT: '587',
+            SMTP_SECURE: 'false',
+            SMTP_USER: '',
+            SMTP_PASS: ''
+        };
+    }
+    
+    log('\n📝 Choose your email provider:', 'blue');
+    log('1. Gmail (recommended for development)');
+    log('2. Custom SMTP server');
+    log('3. Skip (use test emails)');
+    
+    const provider = await question('\nSelect option (1-3): ');
+    
+    if (provider === '1') {
+        log('\n📧 Gmail Setup:', 'blue');
+        log('💡 For Gmail, you\'ll need to:');
+        log('   1. Enable 2-Factor Authentication on your Gmail account');
+        log('   2. Generate an App Password: https://myaccount.google.com/apppasswords');
+        log('   3. Use the App Password below (not your regular Gmail password)\n');
+        
+        const email = await question('Enter your Gmail address: ');
+        const appPassword = await question('Enter your Gmail App Password: ');
+        
+        if (email && appPassword) {
+            log('✅ Gmail configuration saved!', 'green');
+            return {
+                SMTP_HOST: 'smtp.gmail.com',
+                SMTP_PORT: '587',
+                SMTP_SECURE: 'false',
+                SMTP_USER: email,
+                SMTP_PASS: appPassword
+            };
+        }
+    } else if (provider === '2') {
+        log('\n📧 Custom SMTP Setup:', 'blue');
+        
+        const host = await question('SMTP Host (e.g., smtp.yourdomain.com): ');
+        const port = await question('SMTP Port (587 for TLS, 465 for SSL): ');
+        const secure = await question('Use SSL? (y/n): ');
+        const user = await question('SMTP Username: ');
+        const pass = await question('SMTP Password: ');
+        
+        if (host && port && user && pass) {
+            log('✅ Custom SMTP configuration saved!', 'green');
+            return {
+                SMTP_HOST: host,
+                SMTP_PORT: port,
+                SMTP_SECURE: secure.toLowerCase() === 'y' ? 'true' : 'false',
+                SMTP_USER: user,
+                SMTP_PASS: pass
+            };
+        }
+    }
+    
+    log('⏭️  Using test email configuration.', 'yellow');
+    return {
+        SMTP_HOST: 'smtp.gmail.com',
+        SMTP_PORT: '587',
+        SMTP_SECURE: 'false',
+        SMTP_USER: '',
+        SMTP_PASS: ''
+    };
+}
+
+async function createEnvFile() {
     const envPath = path.join(__dirname, '.env');
     
     if (fs.existsSync(envPath)) {
@@ -47,6 +136,9 @@ function createEnvFile() {
 
     const jwtSecret = generateSecureKey(32);
     const sessionSecret = generateSecureKey(32);
+    
+    // Get email configuration
+    const emailConfig = await configureEmail();
 
     const envContent = `# Auto-generated environment configuration
 NODE_ENV=development
@@ -72,12 +164,12 @@ SESSION_SECRET=${sessionSecret}
 TWO_FACTOR_SERVICE_NAME=Secure Asset Portal
 TWO_FACTOR_ISSUER=Secure Asset Portal
 
-# Email Configuration (optional - leave empty to disable emails)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=
-SMTP_PASS=
+# Email Configuration
+SMTP_HOST=${emailConfig.SMTP_HOST}
+SMTP_PORT=${emailConfig.SMTP_PORT}
+SMTP_SECURE=${emailConfig.SMTP_SECURE}
+SMTP_USER=${emailConfig.SMTP_USER}
+SMTP_PASS=${emailConfig.SMTP_PASS}
 
 # Rate Limiting
 RATE_LIMIT_WINDOW_MS=900000
@@ -296,7 +388,8 @@ async function main() {
     }
 
     // Step 2: Create .env file
-    if (!createEnvFile()) {
+    if (!(await createEnvFile())) {
+        rl.close();
         process.exit(1);
     }
 
@@ -327,20 +420,26 @@ async function main() {
     log('📖 View at: http://localhost:3001', 'blue');
     log('🔌 API at: http://localhost:3000', 'blue');
     log('', 'reset');
+    
+    // Close readline interface
+    rl.close();
 }
 
 // Handle errors gracefully
 process.on('uncaughtException', (error) => {
     log(`❌ Setup failed: ${error.message}`, 'red');
+    rl.close();
     process.exit(1);
 });
 
 process.on('unhandledRejection', (error) => {
     log(`❌ Setup failed: ${error.message}`, 'red');
+    rl.close();
     process.exit(1);
 });
 
 main().catch((error) => {
     log(`❌ Setup failed: ${error.message}`, 'red');
+    rl.close();
     process.exit(1);
 });
