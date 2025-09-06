@@ -202,6 +202,36 @@ function createFrontendFiles() {
         }
     }
     
+    // Create frontend .env file if it doesn't exist (CRITICAL for port configuration)
+    const frontendEnvPath = path.join(frontendDir, '.env');
+    if (!fs.existsSync(frontendEnvPath)) {
+        const frontendEnvContent = `# Browser configuration - React will try to open this browser
+BROWSER="Brave Browser"
+
+# Alternative: use full path if name doesn't work
+# BROWSER="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+
+# Disable automatic browser opening if you prefer manual control
+# BROWSER=none
+
+# Development server configuration
+PORT=3001
+
+# API base URL
+REACT_APP_API_URL=http://localhost:3000/api
+`;
+        
+        try {
+            fs.writeFileSync(frontendEnvPath, frontendEnvContent);
+            log('✅ Created frontend/.env with port 3001 configuration', 'green');
+        } catch (error) {
+            log(`❌ Failed to create frontend/.env: ${error.message}`, 'red');
+            return false;
+        }
+    } else {
+        log('✅ Frontend .env already exists', 'green');
+    }
+    
     return true;
 }
 
