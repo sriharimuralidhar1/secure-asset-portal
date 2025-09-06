@@ -7,6 +7,7 @@ import {
   startRegistration,
   browserSupportsWebAuthn 
 } from '@simplewebauthn/browser';
+import QRCode from 'qrcode';
 
 const Container = styled.div`
   min-height: 100vh;
@@ -171,11 +172,84 @@ const InfoItem = styled.li`
   margin-bottom: 0.5rem;
 `;
 
+const DeviceOptions = styled.div`
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  
+  @media (max-width: 600px) {
+    flex-direction: column;
+  }
+`;
+
+const DeviceOption = styled.button`
+  flex: 1;
+  padding: 1rem;
+  border: 2px solid ${props => props.selected ? props.theme.colors.primary : props.theme.colors.border};
+  background: ${props => props.selected ? `${props.theme.colors.primary}10` : props.theme.colors.surface};
+  border-radius: ${props => props.theme.borderRadius.md};
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  
+  &:hover {
+    border-color: ${props => props.theme.colors.primary};
+    background: ${props => props.theme.colors.primary}10;
+  }
+`;
+
+const DeviceIcon = styled.div`
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+`;
+
+const DeviceTitle = styled.div`
+  font-weight: 600;
+  color: ${props => props.theme.colors.text};
+  margin-bottom: 0.25rem;
+`;
+
+const DeviceDescription = styled.div`
+  font-size: 0.75rem;
+  color: ${props => props.theme.colors.textLight};
+`;
+
+const QRContainer = styled.div`
+  text-align: center;
+  margin: 1.5rem 0;
+`;
+
+const QRCodeImage = styled.img`
+  border-radius: ${props => props.theme.borderRadius.md};
+  border: 1px solid ${props => props.theme.colors.border};
+  padding: 1rem;
+  background: white;
+  max-width: 300px;
+  width: 100%;
+`;
+
+const QRInstructions = styled.div`
+  background: ${props => props.theme.colors.background};
+  padding: 1rem;
+  border-radius: ${props => props.theme.borderRadius.md};
+  border: 1px solid ${props => props.theme.colors.border};
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: ${props => props.theme.colors.textLight};
+  
+  strong {
+    color: ${props => props.theme.colors.text};
+  }
+`;
+
 const AddPasskeyPage = () => {
-  const [step, setStep] = useState('email'); // 'email', 'adding', 'success'
+  const [step, setStep] = useState('email'); // 'email', 'device-select', 'adding', 'qr-code', 'success'
   const [email, setEmail] = useState('');
+  const [deviceType, setDeviceType] = useState('current'); // 'current' or 'mobile'
   const [loading, setLoading] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(false);
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [registrationOptions, setRegistrationOptions] = useState(null);
   const navigate = useNavigate();
 
   React.useEffect(() => {
@@ -192,14 +266,135 @@ const AddPasskeyPage = () => {
       toast.error('Please enter your email address');
       return;
     }
-
-    if (!passkeySupported) {
+    
+    setStep('device-select');
+  };
+  
+  const handleDeviceSelect = async (selectedDeviceType) => {
+    setDeviceType(selectedDeviceType);
+    
+    if (selectedDeviceType === 'current' && !passkeySupported) {
       toast.error('Passkeys are not supported in this browser');
       return;
     }
 
     setLoading(true);
-    setStep('adding');
+    
+    try {
+      console.log('🔑 Starting passkey addition process for:', email);
+      
+      // Step 1: Get registration options from server
+      console.log('📋 Requesting registration options from server...');
+      const registrationOptions = await authService.beginPasskeyAddition(email);
+      console.log('📋 Registration options received:', registrationOptions);
+      
+      setRegistrationOptions(registrationOptions);
+      
+      if (selectedDeviceType === 'mobile') {
+        // Generate QR code for cross-device authentication
+        await generateQRCode(registrationOptions);
+        setStep('qr-code');
+      } else {
+        // Use current device
+        setStep('adding');
+        await performPasskeyRegistration(registrationOptions);
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to start passkey registration:', error);
+      handleRegistrationError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const generateQRCode = async (options) => {
+    try {
+      // Create a URL that includes the registration options
+      const qrData = JSON.stringify({
+        type: 'passkey-registration',
+        email: email,
+        options: options,
+        redirectUrl: `${window.location.origin}/passkey/add`
+      });
+      
+      const qrCodeDataUrl = await QRCode.toDataURL(qrData, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      });
+      
+      setQrCodeUrl(qrCodeDataUrl);
+    } catch (error) {
+      console.error('❌ Failed to generate QR code:', error);
+      toast.error('Failed to generate QR code');
+    }
+  };
+  
+  const performPasskeyRegistration = async (options) => {
+    try {
+      toast('Please use your TouchID/fingerprint when prompted', { duration: 5000 });
+      
+      // Step 2: Start the registration ceremony
+      console.log('👆 About to call startRegistration...');
+      const attResp = await startRegistration(options);
+      console.log('✅ Passkey created successfully:', attResp);
+      
+      // Step 3: Send result to server
+      console.log('📤 Sending registration result to server...');
+      const registrationResult = await authService.finishPasskeyAddition(email, attResp);
+      console.log('🎉 Passkey addition successful:', registrationResult);
+      
+      setStep('success');
+      toast.success('Passkey added successfully! You can now use biometric login.');
+      
+    } catch (error) {
+      console.error('❌ Passkey registration failed:', error);
+      handleRegistrationError(error);
+    }
+  };
+  
+  const handleRegistrationError = (error) => {
+    if (error.name === 'NotAllowedError') {
+      toast.error(
+        <div>
+          <strong>Biometric authentication was cancelled</strong>
+          <br />
+          Please try again to add your passkey
+        </div>,
+        { duration: 5000 }
+      );
+    } else if (error.name === 'AbortError') {
+      toast.error('Registration timed out. Please try again.');
+    } else if (error.response?.status === 404 || error.message?.includes('not found')) {
+      toast.error(
+        <div>
+          <strong>Failed to add passkey</strong>
+          <br />
+          Account not found, Enter the email used when creating the account.
+        </div>,
+        { duration: 6000 }
+      );
+    } else if (error.response?.status === 409 || error.message?.includes('already registered')) {
+      toast.error('This passkey is already registered to an account.');
+    } else {
+      // Check if we have a custom error message from the server
+      const serverMessage = error.response?.data?.message || error.response?.data?.error;
+      toast.error(
+        <div>
+          <strong>Failed to add passkey</strong>
+          <br />
+          {serverMessage || error.message || 'Please try again or contact support'}
+        </div>,
+        { duration: 5000 }
+      );
+    }
+    
+    setStep('device-select');
+  };
 
     try {
       console.log('🔑 Starting passkey addition process for:', email);
@@ -304,16 +499,95 @@ const AddPasskeyPage = () => {
           />
         </FormGroup>
         
-        <Button type="submit" disabled={loading || !passkeySupported}>
-          {loading ? '🔄 Adding Passkey...' : '🔐 Add Passkey'}
+        <Button type="submit" disabled={loading}>
+          {loading ? '🔄 Continuing...' : 'Continue →'}
         </Button>
       </Form>
+    </>
+  );
+  
+  const renderDeviceSelectStep = () => (
+    <>
+      <PasskeyIcon>📱</PasskeyIcon>
+      <Header>
+        <Title>Choose Your Device</Title>
+        <Subtitle>Where do you want to create your passkey?</Subtitle>
+      </Header>
+      
+      <DeviceOptions>
+        <DeviceOption
+          selected={deviceType === 'current'}
+          onClick={() => handleDeviceSelect('current')}
+          disabled={loading}
+        >
+          <DeviceIcon>💻</DeviceIcon>
+          <DeviceTitle>This Device</DeviceTitle>
+          <DeviceDescription>
+            Use TouchID, FaceID, or Windows Hello on this computer
+          </DeviceDescription>
+        </DeviceOption>
+        
+        <DeviceOption
+          selected={deviceType === 'mobile'}
+          onClick={() => handleDeviceSelect('mobile')}
+          disabled={loading}
+        >
+          <DeviceIcon>📱</DeviceIcon>
+          <DeviceTitle>Mobile Device</DeviceTitle>
+          <DeviceDescription>
+            Scan QR code with your phone to register a passkey
+          </DeviceDescription>
+        </DeviceOption>
+      </DeviceOptions>
       
       {!passkeySupported && (
-        <StatusMessage type="error">
-          Your browser does not support passkeys. Please use a modern browser like Chrome, Safari, or Firefox.
+        <StatusMessage type="warning">
+          <strong>Limited Options:</strong> Your current browser doesn't support passkeys. 
+          Use the QR code option to register a passkey on your mobile device.
         </StatusMessage>
       )}
+      
+      {loading && (
+        <StatusMessage type="info">
+          Setting up passkey registration...
+        </StatusMessage>
+      )}
+    </>
+  );
+  
+  const renderQRCodeStep = () => (
+    <>
+      <PasskeyIcon>📏</PasskeyIcon>
+      <Header>
+        <Title>Scan QR Code</Title>
+        <Subtitle>Use your phone to register a passkey</Subtitle>
+      </Header>
+      
+      <QRContainer>
+        {qrCodeUrl && (
+          <QRCodeImage src={qrCodeUrl} alt="Passkey Registration QR Code" />
+        )}
+      </QRContainer>
+      
+      <QRInstructions>
+        <strong>Instructions:</strong>
+        <br />1. Open your phone's camera app
+        <br />2. Point it at the QR code above
+        <br />3. Tap the notification to open in your browser
+        <br />4. Complete passkey setup on your phone
+        <br />5. Return to this page when complete
+      </QRInstructions>
+      
+      <StatusMessage type="info">
+        <strong>Keep this page open</strong> while you complete the setup on your phone.
+      </StatusMessage>
+      
+      <Button 
+        onClick={() => setStep('device-select')} 
+        style={{ background: '#6b7280', marginTop: '1rem' }}
+      >
+        ← Back to Device Selection
+      </Button>
     </>
   );
 
@@ -376,13 +650,17 @@ const AddPasskeyPage = () => {
         </BackLink>
         
         <StepIndicator>
-          {step === 'email' && 'Step 1 of 2: Enter Email'}
-          {step === 'adding' && 'Step 2 of 2: Biometric Verification'}
+          {step === 'email' && 'Step 1 of 3: Enter Email'}
+          {step === 'device-select' && 'Step 2 of 3: Choose Device'}
+          {step === 'adding' && 'Step 3 of 3: Biometric Verification'}
+          {step === 'qr-code' && 'Step 3 of 3: Scan QR Code'}
           {step === 'success' && 'Completed Successfully'}
         </StepIndicator>
         
         {step === 'email' && renderEmailStep()}
+        {step === 'device-select' && renderDeviceSelectStep()}
         {step === 'adding' && renderAddingStep()}
+        {step === 'qr-code' && renderQRCodeStep()}
         {step === 'success' && renderSuccessStep()}
       </Card>
     </Container>
