@@ -1,8 +1,8 @@
 # 🛡️ Secure Asset Portal
 
-> A modern, security-focused financial asset management application with **passkey biometric authentication**
+> A straightforward financial asset tracker with biometric login - because remembering passwords is annoying.
 
-> ⚡ **New**: Super simple setup! Just run `npm run setup && npm run dev` → [Quick Start](#quick-start)
+> ⚡ **Quick start**: Just run `npm run setup && npm run dev` and you're good to go!
 
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-18+-blue.svg)](https://reactjs.org/)
@@ -12,39 +12,39 @@
 
 ## ✨ Features
 
-🔐 **Advanced Authentication**
-- **Passkey Biometric Login** - TouchID, FaceID, Windows Hello support via **fido2-lib**
-- **Two-Factor Authentication** - TOTP with QR codes using Speakeasy
-- **Traditional Password Login** - Secure bcrypt hashing
-- **Multiple Device Support** - Add passkeys to all your devices
+🔐 **Easy Login Options**
+- **Biometric Login** - Use your fingerprint, face, or Windows Hello instead of passwords
+- **Two-Factor Authentication** - Extra security with authenticator apps
+- **Regular Password** - Good old username/password if you prefer
+- **Multiple Devices** - Set up biometric login on your laptop, phone, whatever
 
-💰 **Asset Management**
-- Track diverse financial assets (stocks, crypto, real estate, etc.)
-- Portfolio analytics and reporting
-- Category-based organization
-- Value history tracking
+💰 **Track Your Stuff**
+- Keep tabs on your investments, crypto, real estate, whatever you own
+- See how your portfolio is doing with charts and reports
+- Organize everything by categories that make sense to you
+- Watch how your assets change value over time
 
-🛡️ **Enterprise Security**
-- Row-level security (RLS) in PostgreSQL
-- Comprehensive audit logging
-- Rate limiting and DDoS protection
-- Security headers (CSP, HSTS, etc.)
-- Input validation and sanitization
+🛡️ **Security That Actually Works**
+- Your data stays private (users can only see their own stuff)
+- Everything gets logged so you know what happened when
+- Protection against spam and attacks
+- All the boring security headers that keep hackers out
+- Input checking so nobody can mess with the database
 
-📧 **Smart Notifications**
-- Welcome emails with 2FA setup
-- Passkey confirmation emails
-- Security alerts and notifications
+📧 **Helpful Emails**
+- Welcome message when you sign up (with 2FA setup instructions)
+- Confirmation when you add biometric login
+- Heads up if something security-related happens
 
-## 📊 Asset Categories
+## 📊 What You Can Track
 
-- **Real Estate**: Properties, land, commercial real estate
-- **Investment Accounts**: 401k, IRA, brokerage accounts
-- **Bank Accounts**: Checking, savings, CDs, money market
-- **Cryptocurrencies**: Digital assets and wallets
-- **Physical Assets**: Precious metals, collectibles, vehicles
-- **Business Interests**: Partnerships, private equity, business ownership
-- **Insurance**: Life insurance policies with cash value
+- **Real Estate**: Your house, rental properties, that plot of land you bought
+- **Investment Accounts**: 401k, IRA, trading accounts, all that good stuff
+- **Bank Accounts**: Checking, savings, CDs - basically where your money lives
+- **Crypto**: Bitcoin, Ethereum, whatever coins you're holding
+- **Physical Stuff**: Gold, collectibles, cars, anything worth money
+- **Business**: If you own part of a company or side business
+- **Insurance**: Life insurance that builds cash value
 
 ## 🏗️ Project Structure
 
@@ -77,40 +77,40 @@ secure-asset-portal/
 - **PostgreSQL** - [Download here](https://www.postgresql.org/) or use Docker
 - **Modern browser** with WebAuthn support
 
-### 🚀 Super Simple Setup
+### 🚀 Getting Started
 
-1. **Clone and setup:**
+1. **Download and setup:**
    ```bash
    git clone https://github.com/yourusername/secure-asset-portal.git
    cd secure-asset-portal
    npm run setup
    ```
    
-2. **Start the app:**
+2. **Start it up:**
    ```bash
    npm run dev
    ```
    
-3. **Open in browser:**
-   - 🌐 Frontend: http://localhost:3001
-   - 🔌 Backend API: http://localhost:3000
+3. **Check it out:**
+   - App: http://localhost:3001
+   - API: http://localhost:3000 (if you're curious)
 
-### ✨ What the setup script does:
+### ✨ The setup script handles the boring stuff:
 
-✅ Installs all dependencies (backend + frontend)  
-✅ Creates `.env` with secure auto-generated keys  
-✅ Sets up PostgreSQL database automatically  
-✅ Applies database schema  
-✅ Ready to run in 30 seconds!  
+✅ Downloads everything you need  
+✅ Creates config files with random secure keys  
+✅ Sets up the database  
+✅ Gets everything talking to each other  
+✅ Should be ready in about 30 seconds!
 
-### 🧪 Test Biometric Login
+### 🧪 Try the Biometric Login
 
-1. **Register** at http://localhost:3001/register
-2. **Setup 2FA** with the QR code
-3. **Add passkey** (TouchID/FaceID/Windows Hello)
-4. **Login** with biometrics!
+1. **Sign up** at http://localhost:3001/register
+2. **Set up 2FA** (scan the QR code with your phone's authenticator app)
+3. **Add biometric login** (it'll ask for TouchID/FaceID/fingerprint)
+4. **Log in with your finger/face** next time!
 
-> 📝 **Passkey Support**: TouchID, FaceID, Windows Hello, fingerprint, security keys
+> Works with TouchID, FaceID, Windows Hello, fingerprint readers, and security keys
 
 ### 🔧 Troubleshooting
 
