@@ -402,7 +402,7 @@ const AddPasskeyPage = () => {
       const response = await fetch('/api/network-info');
       if (response.ok) {
         const data = await response.json();
-        return `http://${data.localIp}:${window.location.port || '3001'}`;
+        return `https://${data.localIp}:${window.location.port || '3001'}`;
       }
     } catch (error) {
       console.log('Could not get network IP from backend, using fallback');
@@ -420,7 +420,7 @@ const AddPasskeyPage = () => {
           if (ipMatch && ipMatch[1] && !ipMatch[1].startsWith('127.')) {
             pc.close();
             const port = window.location.port || '3001';
-            resolve(`http://${ipMatch[1]}:${port}`);
+            resolve(`https://${ipMatch[1]}:${port}`);
             return;
           }
         }

@@ -112,6 +112,51 @@ secure-asset-portal/
 
 > 📝 **Passkey Support**: TouchID, FaceID, Windows Hello, fingerprint, security keys
 
+## 📱 Mobile WebAuthn Setup (HTTPS Required)
+
+### Why HTTPS is Required
+
+WebAuthn (passkey authentication) requires **HTTPS for security** - this includes mobile devices. HTTP connections will show "browser incompatible" errors on mobile.
+
+### 🔐 Enable HTTPS for Mobile Development
+
+1. **Install mkcert** (creates trusted local certificates):
+   ```bash
+   # macOS
+   brew install mkcert
+   
+   # Linux
+   wget https://github.com/FiloSottile/mkcert/releases/latest/download/mkcert-v1.4.4-linux-amd64
+   
+   # Windows
+   choco install mkcert
+   ```
+
+2. **Generate certificates**:
+   ```bash
+   ./setup-https.sh
+   ```
+   
+3. **Start with HTTPS**:
+   ```bash
+   npm run dev  # Now serves HTTPS automatically
+   ```
+
+4. **Access from mobile**:
+   - Desktop: `https://localhost:3001`
+   - Mobile: `https://192.168.x.x:3001` (IP shown in terminal)
+   - **Accept certificate warning** on mobile (normal for self-signed certs)
+
+### 🧪 Test Cross-Device Passkey Flow
+
+1. **On Desktop**: Navigate to "Add Passkey" → Choose "Mobile Device"
+2. **Scan QR Code**: Use your phone's camera to scan the displayed QR code
+3. **Mobile Browser Opens**: The QR code opens your mobile browser to the passkey page
+4. **Biometric Prompt**: Your phone will prompt for fingerprint/TouchID/FaceID
+5. **Complete**: Authentication completes and syncs back to desktop
+
+> 🎉 **Success**: You now have a passkey registered that works across devices!
+
 ### 🔧 Troubleshooting
 
 **No PostgreSQL?**

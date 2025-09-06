@@ -1,5 +1,8 @@
 require('dotenv').config({ path: '../.env' });
 const express = require('express');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -52,7 +55,7 @@ app.use('/api/auth/', authLimiter);
 // CORS configuration
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests from localhost, 127.0.0.1, and local network IPs
+    // Allow requests from localhost, 127.0.0.1, and local network IPs (HTTP and HTTPS)
     if (!origin || 
         origin.includes('localhost') || 
         origin.includes('127.0.0.1') || 
@@ -173,12 +176,37 @@ const startServer = async () => {
       process.exit(1);
     }
     
-    app.listen(PORT, () => {
-      console.log(`🚀 Secure Asset Portal API running on port ${PORT}`);
-      console.log(`🛡️  Security middleware enabled`);
-      console.log(`🔒 CORS enabled for: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`);
-      console.log(`🗄️  PostgreSQL database connected`);
-    });
+    // Check for HTTPS certificates
+    const certPath = path.resolve(__dirname, '../certs/cert.pem');
+    const keyPath = path.resolve(__dirname, '../certs/key.pem');
+    
+    if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+      // HTTPS server for WebAuthn compatibility on mobile
+      const httpsOptions = {
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath)
+      };
+      
+      https.createServer(httpsOptions, app).listen(PORT, () => {
+        console.log(`🚀 Secure Asset Portal API running on HTTPS port ${PORT}`);
+        console.log(`🔐 HTTPS enabled for WebAuthn mobile compatibility`);
+        console.log(`🛡️  Security middleware enabled`);
+        console.log(`🔒 CORS enabled for local network access`);
+        console.log(`🗄️  PostgreSQL database connected`);
+        console.log(`📱 Mobile WebAuthn ready at https://192.168.68.112:${PORT}`);
+      });
+    } else {
+      // Fallback to HTTP if certificates not found
+      console.warn('⚠️  HTTPS certificates not found, falling back to HTTP');
+      console.warn('⚠️  Mobile WebAuthn may not work without HTTPS');
+      
+      app.listen(PORT, () => {
+        console.log(`🚀 Secure Asset Portal API running on HTTP port ${PORT}`);
+        console.log(`🛡️  Security middleware enabled`);
+        console.log(`🔒 CORS enabled for: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`);
+        console.log(`🗄️  PostgreSQL database connected`);
+      });
+    }
   } catch (error) {
     console.error('❌ Server startup failed:', error.message);
     process.exit(1);
