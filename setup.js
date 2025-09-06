@@ -112,6 +112,99 @@ function checkPostgreSQL() {
     }
 }
 
+function createFrontendFiles() {
+    log('🌐 Setting up frontend files...', 'blue');
+    
+    const frontendDir = path.join(__dirname, 'frontend');
+    const publicDir = path.join(frontendDir, 'public');
+    const indexHtmlPath = path.join(publicDir, 'index.html');
+    
+    // Create public directory if it doesn't exist
+    if (!fs.existsSync(publicDir)) {
+        try {
+            fs.mkdirSync(publicDir, { recursive: true });
+            log('✅ Created frontend/public directory', 'green');
+        } catch (error) {
+            log(`❌ Failed to create public directory: ${error.message}`, 'red');
+            return false;
+        }
+    }
+    
+    // Create index.html if it doesn't exist
+    if (!fs.existsSync(indexHtmlPath)) {
+        const indexHtmlContent = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#2563eb" />
+    <meta
+      name="description"
+      content="Secure Asset Portal - Manage your financial assets safely and securely"
+    />
+    <meta name="author" content="Secure Asset Portal Team" />
+    
+    <!-- Security headers for content security -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+    
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <title>Secure Asset Portal</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this application.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+`;
+        
+        try {
+            fs.writeFileSync(indexHtmlPath, indexHtmlContent);
+            log('✅ Created frontend/public/index.html', 'green');
+        } catch (error) {
+            log(`❌ Failed to create index.html: ${error.message}`, 'red');
+            return false;
+        }
+    } else {
+        log('✅ Frontend index.html already exists', 'green');
+    }
+    
+    // Create manifest.json if it doesn't exist
+    const manifestPath = path.join(publicDir, 'manifest.json');
+    if (!fs.existsSync(manifestPath)) {
+        const manifestContent = `{
+  "short_name": "Asset Portal",
+  "name": "Secure Asset Portal",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff"
+}
+`;
+        
+        try {
+            fs.writeFileSync(manifestPath, manifestContent);
+            log('✅ Created frontend/public/manifest.json', 'green');
+        } catch (error) {
+            log('⚠️  Could not create manifest.json (optional)', 'yellow');
+        }
+    }
+    
+    return true;
+}
+
 function setupDatabase() {
     log('🗄️  Setting up database...', 'blue');
     
@@ -177,7 +270,12 @@ async function main() {
         process.exit(1);
     }
 
-    // Step 3: Setup database
+    // Step 3: Create frontend files
+    if (!createFrontendFiles()) {
+        process.exit(1);
+    }
+
+    // Step 4: Setup database
     const dbSuccess = setupDatabase();
 
     log('\n🎉 Setup completed!', 'bold');
