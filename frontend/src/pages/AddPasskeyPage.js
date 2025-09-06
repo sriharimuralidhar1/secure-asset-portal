@@ -243,7 +243,7 @@ const QRInstructions = styled.div`
 `;
 
 const AddPasskeyPage = () => {
-  const [step, setStep] = useState('email'); // 'email', 'device-select', 'adding', 'qr-code', 'success'
+  const [step, setStep] = useState('email'); // 'email', 'adding', 'success'
   const [email, setEmail] = useState('');
   const [deviceType] = useState('current'); // Always use current device
   const [loading, setLoading] = useState(false);
@@ -487,7 +487,7 @@ const AddPasskeyPage = () => {
       );
     }
     
-    setStep('device-select');
+    setStep('email');
   };
 
   const renderEmailStep = () => (
@@ -674,17 +674,13 @@ const AddPasskeyPage = () => {
         </BackLink>
         
         <StepIndicator>
-          {step === 'email' && 'Step 1 of 3: Enter Email'}
-          {step === 'device-select' && 'Step 2 of 3: Choose Device'}
-          {step === 'adding' && 'Step 3 of 3: Biometric Verification'}
-          {step === 'qr-code' && 'Step 3 of 3: Scan QR Code'}
+          {step === 'email' && 'Step 1 of 2: Enter Email'}
+          {step === 'adding' && 'Step 2 of 2: Biometric Verification'}
           {step === 'success' && 'Completed Successfully'}
         </StepIndicator>
         
         {step === 'email' && renderEmailStep()}
-        {step === 'device-select' && renderDeviceSelectStep()}
         {step === 'adding' && renderAddingStep()}
-        {step === 'qr-code' && renderQRCodeStep()}
         {step === 'success' && renderSuccessStep()}
       </Card>
     </Container>
