@@ -9,7 +9,6 @@
     "dev:brave": "concurrently \"npm run dev:backend\" \"npm run dev:frontend:brave\"",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm start",
-    "dev:http": "ENABLE_HTTPS=false FORCE_HTTPS=false concurrently \"npm run dev:backend\" \"cd frontend && HTTPS=false REACT_APP_API_URL=http://localhost:3000/api npm start\"",
     "dev:frontend:brave": "cd frontend && BROWSER=\"Brave Browser\" npm start",
     "start": "npm run start:backend",
     "start:backend": "cd backend && npm start",
@@ -47,17 +46,11 @@
   ],
   "author": "",
   "license": "MIT",
-  "dependencies": {
-    "bcrypt": "^5.1.0",
-    "pg": "^8.11.0",
-    "uuid": "^9.0.0"
-  },
   "devDependencies": {
     "concurrently": "^8.2.2",
     "eslint": "^8.42.0",
     "eslint-config-prettier": "^8.8.0",
     "eslint-plugin-react": "^7.32.2",
-    "mkcert": "^3.2.0",
     "prettier": "^2.8.8"
   },
   "engines": {
