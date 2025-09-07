@@ -543,8 +543,11 @@ router.post('/passkey/register/finish', async (req, res) => {
     
     console.log('✅ Passkey stored successfully:', passkey.id);
 
-    // Clear challenge
-    await updateUser(user.id, { currentChallenge: null });
+    // Clear challenge and enable 2FA (passkeys are a form of 2FA)
+    await updateUser(user.id, { 
+      currentChallenge: null,
+      twoFactorEnabled: true 
+    });
 
     // Log the registration
     await addAuditLog({
@@ -1173,8 +1176,12 @@ router.post('/passkey/add/finish', async (req, res) => {
     
     console.log('✅ Additional passkey stored successfully:', passkey.id);
 
-    // Clear challenge
-    await updateUser(user.id, { currentChallenge: null });
+    // Clear challenge and enable 2FA if not already enabled (passkeys are a form of 2FA)
+    const updateData = { currentChallenge: null };
+    if (!user.twoFactorEnabled) {
+      updateData.twoFactorEnabled = true;
+    }
+    await updateUser(user.id, updateData);
 
     // Log the registration
     await addAuditLog({
