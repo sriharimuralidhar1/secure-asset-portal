@@ -6,7 +6,6 @@ A simple financial asset tracker with biometric login—because remembering pass
 [![React](https://img.shields.io/badge/React-18+-blue.svg)](https://reactjs.org/)  
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-blue.svg)](https://www.postgresql.org/)  
 [![fido2-lib](https://img.shields.io/badge/fido2--lib-Passkeys-purple.svg)](https://github.com/webauthn-open-source/fido2-lib)  
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
