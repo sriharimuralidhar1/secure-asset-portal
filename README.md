@@ -29,10 +29,11 @@ A simple financial asset tracker with biometric login—because remembering pass
 ## Getting Started
 
 Quick setup:
-
-`git clone https://github.com/yourusername/secure-asset-portal.git`
-`cd secure-asset-portal`
-`npm run setup && npm run dev`
+```bash
+git clone https://github.com/yourusername/secure-asset-portal.git
+cd secure-asset-portal
+npm run setup && npm run dev
+```
 
 Then open [http://localhost:3001](http://localhost:3001), sign up, set up 2FA, and add biometric login.
 
