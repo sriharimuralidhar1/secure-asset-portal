@@ -26,7 +26,7 @@ const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
 // WebAuthn configuration
-const rpName = 'Secure Asset Portal';
+const rpName = process.env.WEBAUTHN_RP_NAME || 'Secure Asset Portal';
 
 // Dynamic RP ID and origin handling for cross-device authentication
 const getRpId = (req) => {
@@ -120,8 +120,8 @@ router.post('/register', validateRegistration, async (req, res) => {
 
     // Generate 2FA secret
     const secret = speakeasy.generateSecret({
-      name: `Secure Asset Portal (${email})`,
-      issuer: 'Secure Asset Portal'
+      name: `${process.env.TWO_FACTOR_SERVICE_NAME || 'Secure Asset Portal'} (${email})`,
+      issuer: process.env.TWO_FACTOR_ISSUER || 'Secure Asset Portal'
     });
 
     // Create user
@@ -399,7 +399,7 @@ router.post('/passkey/register/begin', async (req, res) => {
     const customOptions = {
       challenge: challenge,
       rp: {
-        name: 'Secure Asset Portal',
+        name: process.env.WEBAUTHN_RP_NAME || 'Secure Asset Portal',
         id: process.env.NODE_ENV === 'production' 
           ? process.env.WEBAUTHN_RP_ID || 'secure-asset-portal.com' 
           : 'localhost'
@@ -1081,7 +1081,7 @@ router.post('/passkey/add/begin', async (req, res) => {
     const customOptions = {
       challenge: challenge,
       rp: {
-        name: 'Secure Asset Portal',
+        name: process.env.WEBAUTHN_RP_NAME || 'Secure Asset Portal',
         id: getRpId(req)
       },
       user: {
