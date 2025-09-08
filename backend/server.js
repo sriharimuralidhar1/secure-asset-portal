@@ -198,9 +198,17 @@ const startServer = async () => {
     }
     
     app.listen(PORT, () => {
-      console.log(`🚀 Secure Asset Portal API running on port ${PORT}`);
+      console.log(`🚀 Secure Asset Portal running on port ${PORT}`);
       console.log(`🛡️  Security middleware enabled`);
-      console.log(`🔒 CORS enabled for: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`);
+      
+      if (process.env.NODE_ENV === 'production') {
+        console.log(`📱 Frontend + API: http://localhost:${PORT}`);
+        console.log(`🔒 Production mode: Static files served from React build`);
+      } else {
+        console.log(`🔒 CORS enabled for: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`);
+        console.log(`🔧 Development mode: API only on port ${PORT}`);
+      }
+      
       console.log(`🗄️  PostgreSQL database connected`);
     });
   } catch (error) {
