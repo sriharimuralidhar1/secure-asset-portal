@@ -9,10 +9,8 @@ const { Fido2Lib } = require('fido2-lib');
 // Initialize Fido2Lib
 const fido2 = new Fido2Lib({
   timeout: 60000,
-  rpId: process.env.NODE_ENV === 'production' 
-    ? process.env.WEBAUTHN_RP_ID || 'secure-asset-portal.com' 
-    : 'localhost',
-  rpName: 'Secure Asset Portal',
+  rpId: process.env.WEBAUTHN_RP_ID || 'localhost',
+  rpName: process.env.WEBAUTHN_RP_NAME || 'Secure Asset Portal',
   rpIcon: 'https://example.com/logo.png',
   challengeSize: 128,
   attestation: "none",
@@ -32,12 +30,14 @@ const rpName = 'Secure Asset Portal';
 
 // Dynamic RP ID and origin handling for cross-device authentication
 const getRpId = (req) => {
-  if (process.env.NODE_ENV === 'production') {
-    return process.env.WEBAUTHN_RP_ID || 'secure-asset-portal.com';
+  // Use environment variable first, fallback to localhost for development
+  const configuredRpId = process.env.WEBAUTHN_RP_ID;
+  if (configuredRpId) {
+    return configuredRpId;
   }
   
-  // For development, use the hostname from the request
-  const host = req.get('host') || 'localhost:3001';
+  // For dynamic determination, use the hostname from the request
+  const host = req.get('host') || 'localhost:3000';
   const hostname = host.split(':')[0];
   
   // If it's a local network IP, use 'localhost' as RP ID for compatibility
@@ -52,12 +52,18 @@ const getRpId = (req) => {
 };
 
 const getOrigin = (req) => {
-  if (process.env.NODE_ENV === 'production') {
-    return process.env.FRONTEND_URL || 'https://secure-asset-portal.com';
+  // Use the origin from the request if available
+  const requestOrigin = req.get('origin');
+  if (requestOrigin) {
+    return requestOrigin;
   }
   
-  // Use the origin from the request for development
-  return req.get('origin') || 'http://localhost:3001';
+  // Fallback based on environment
+  if (process.env.NODE_ENV === 'production') {
+    return process.env.FRONTEND_URL || 'https://localhost:3000';
+  }
+  
+  return 'http://localhost:3001';
 };
 
 // Default values for backward compatibility
