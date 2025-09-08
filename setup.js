@@ -139,7 +139,99 @@ async function configureEmail() {
     };
 }
 
-// HTTPS configuration removed for simple development setup
+// Check and prompt for email configuration if needed
+async function checkAndConfigureEmail() {
+    log('\n📧 Checking email configuration...', 'blue');
+    
+    const envPath = path.join(__dirname, '.env');
+    if (!fs.existsSync(envPath)) {
+        log('⚠️  .env file not found, will be created with email setup', 'yellow');
+        return await configureEmail();
+    }
+    
+    try {
+        const envContent = fs.readFileSync(envPath, 'utf8');
+        const smtpUser = envContent.match(/SMTP_USER=(.*)$/m)?.[1]?.trim();
+        const smtpPass = envContent.match(/SMTP_PASS=(.*)$/m)?.[1]?.trim();
+        
+        // Check if email is configured (has both user and password)
+        if (!smtpUser || !smtpPass || smtpUser === '' || smtpPass === '') {
+            log('📧 Email is not configured or incomplete', 'yellow');
+            log('💡 Let\'s set up email for notifications and registration emails', 'blue');
+            
+            const setupNow = await question('\nWould you like to configure email now? (y/n): ');
+            
+            if (setupNow.toLowerCase() === 'y' || setupNow.toLowerCase() === 'yes') {
+                const emailConfig = await configureEmail();
+                
+                // Update the existing .env file with email configuration
+                await updateEmailInEnv(emailConfig);
+                
+                return emailConfig;
+            } else {
+                log('⏭️  Skipping email configuration. Using test emails (Ethereal).', 'yellow');
+                return {
+                    SMTP_HOST: 'smtp.gmail.com',
+                    SMTP_PORT: '587',
+                    SMTP_SECURE: 'false',
+                    SMTP_USER: '',
+                    SMTP_PASS: '',
+                    FROM_EMAIL: 'Secure Asset Portal <noreply@example.com>',
+                    APP_NAME: 'Secure Asset Portal'
+                };
+            }
+        } else {
+            log('✅ Email is already configured', 'green');
+            const appName = envContent.match(/FROM_EMAIL=([^<]*)/)?.[1]?.trim() || 'Secure Asset Portal';
+            return {
+                SMTP_HOST: envContent.match(/SMTP_HOST=(.*)$/m)?.[1]?.trim() || 'smtp.gmail.com',
+                SMTP_PORT: envContent.match(/SMTP_PORT=(.*)$/m)?.[1]?.trim() || '587',
+                SMTP_SECURE: envContent.match(/SMTP_SECURE=(.*)$/m)?.[1]?.trim() || 'false',
+                SMTP_USER: smtpUser,
+                SMTP_PASS: smtpPass,
+                FROM_EMAIL: envContent.match(/FROM_EMAIL=(.*)$/m)?.[1]?.trim() || `${appName} <noreply@example.com>`,
+                APP_NAME: appName
+            };
+        }
+    } catch (error) {
+        log(`⚠️  Could not read .env file: ${error.message}`, 'yellow');
+        return await configureEmail();
+    }
+}
+
+async function updateEmailInEnv(emailConfig) {
+    const envPath = path.join(__dirname, '.env');
+    
+    try {
+        let envContent = fs.readFileSync(envPath, 'utf8');
+        
+        // Update or add email configuration
+        const updates = [
+            ['SMTP_HOST', emailConfig.SMTP_HOST],
+            ['SMTP_PORT', emailConfig.SMTP_PORT],
+            ['SMTP_SECURE', emailConfig.SMTP_SECURE],
+            ['SMTP_USER', emailConfig.SMTP_USER],
+            ['SMTP_PASS', emailConfig.SMTP_PASS],
+            ['FROM_EMAIL', emailConfig.FROM_EMAIL],
+            ['TWO_FACTOR_SERVICE_NAME', emailConfig.APP_NAME],
+            ['TWO_FACTOR_ISSUER', emailConfig.APP_NAME]
+        ];
+        
+        updates.forEach(([key, value]) => {
+            const regex = new RegExp(`^${key}=.*$`, 'm');
+            if (regex.test(envContent)) {
+                envContent = envContent.replace(regex, `${key}=${value}`);
+            } else {
+                envContent += `\n${key}=${value}`;
+            }
+        });
+        
+        fs.writeFileSync(envPath, envContent);
+        log('✅ Updated .env file with email configuration', 'green');
+    } catch (error) {
+        log(`❌ Failed to update .env file: ${error.message}`, 'red');
+    }
+}
 
 async function createEnvFile() {
     const envPath = path.join(__dirname, '.env');
@@ -429,11 +521,8 @@ async function main() {
         process.exit(1);
     }
 
-    // Step 2: Create .env file
-    if (!(await createEnvFile())) {
-        rl.close();
-        process.exit(1);
-    }
+    // Step 2: Check and configure email if needed
+    const emailConfig = await checkAndConfigureEmail();
 
     // Step 3: Create frontend files
     if (!createFrontendFiles()) {
