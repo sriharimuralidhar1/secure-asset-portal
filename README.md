@@ -26,18 +26,44 @@ A simple financial asset tracker with biometric login—because remembering pass
 - Business ownership  
 - Insurance policies  
 
-## Getting Started
+# 🚀 Quick Start - Secure Asset Portal
 
-Quick setup:
+## One Command Setup
+
+Run this single command and you're done:
+
 ```bash
-git clone https://github.com/yourusername/secure-asset-portal.git
-cd secure-asset-portal
-npm run setup && npm run dev
+npm run setup
 ```
 
-Then open [http://localhost:3001](http://localhost:3001), sign up, set up 2FA, and add biometric login.
+That's it! The script will:
 
-The setup script handles dependencies, database setup, email config, and port management automatically.
+✅ Install all dependencies  
+✅ Configure your environment  
+✅ Set up the database  
+✅ Build the application   
+✅ Open your browser automatically
+
+## What You'll Need
+
+- **Node.js** (18+)
+- **PostgreSQL** (running locally)
+- **5 minutes** for setup
+
+## Access Your Portal
+
+After setup, your Secure Asset Portal will open automatically at http://localhost:3001`
+
+## Features Ready to Use
+
+🔐 **Secure Authentication** with 2FA  
+👆 **Passkey/Biometric Login** (TouchID, FaceID)  
+💰 **Asset Management** (stocks, crypto, real estate)  
+📊 **Portfolio Reports** and analytics  
+📧 **Email Notifications** (Gmail integration)  
+🔒 **Bank-level Security** with audit trails  
+
+---
 
 ## Tech Stack
 
