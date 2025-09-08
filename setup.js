@@ -5,6 +5,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const crypto = require('crypto');
 const readline = require('readline');
+const net = require('net');
 
 console.log('🛡️  Setting up Secure Asset Portal...\n');
 
@@ -36,6 +37,44 @@ function question(prompt) {
 
 function generateSecureKey(length = 64) {
     return crypto.randomBytes(length).toString('hex');
+}
+
+// Port detection utilities for flexible development and Render deployment
+function isPortAvailable(port) {
+    return new Promise((resolve) => {
+        const server = net.createServer();
+        server.listen(port, () => {
+            server.close(() => resolve(true));
+        });
+        server.on('error', () => resolve(false));
+    });
+}
+
+async function findAvailablePort(basePort, maxTries = 10) {
+    for (let i = 0; i < maxTries; i++) {
+        const port = basePort + i;
+        if (await isPortAvailable(port)) {
+            return port;
+        }
+    }
+    return basePort; // fallback to base port if all tries fail
+}
+
+async function detectOptimalPorts() {
+    log('🔍 Detecting optimal ports for development...', 'blue');
+    
+    const backendPort = await findAvailablePort(3000);
+    const frontendPort = await findAvailablePort(3001);
+    
+    // If standard ports are available, use them
+    if (backendPort === 3000 && frontendPort === 3001) {
+        log('✅ Using standard ports: Backend 3000, Frontend 3001', 'green');
+        return { backend: 3000, frontend: 3001, isStandard: true };
+    }
+    
+    // Otherwise use detected ports
+    log(`🔧 Using available ports: Backend ${backendPort}, Frontend ${frontendPort}`, 'yellow');
+    return { backend: backendPort, frontend: frontendPort, isStandard: false };
 }
 
 function runCommand(command, description, silent = false) {
@@ -319,8 +358,12 @@ function checkPostgreSQL() {
     }
 }
 
-function createFrontendFiles() {
+function createFrontendFiles(ports = null) {
     log('🌐 Setting up frontend files...', 'blue');
+    
+    // Use provided ports or defaults
+    const backendPort = ports?.backend || 3000;
+    const frontendPort = ports?.frontend || 3001;
     
     const frontendDir = path.join(__dirname, 'frontend');
     const publicDir = path.join(frontendDir, 'public');
@@ -421,11 +464,11 @@ BROWSER="Brave Browser"
 # Disable automatic browser opening if you prefer manual control
 # BROWSER=none
 
-# Development server configuration
-PORT=3001
+# Development server configuration (flexible ports for Render deployment)
+PORT=${frontendPort}
 
-# API base URL
-REACT_APP_API_URL=http://localhost:3000/api
+# API base URL (auto-configured for optimal development and deployment)
+REACT_APP_API_URL=http://localhost:${backendPort}/api
 `;
         
         try {
@@ -442,22 +485,26 @@ REACT_APP_API_URL=http://localhost:3000/api
     return true;
 }
 
-// Create .env file with the provided email configuration
-async function createEnvFileWithConfig(emailConfig) {
+// Create .env file with the provided email configuration and optimal ports
+async function createEnvFileWithConfig(emailConfig, ports = null) {
     const envPath = path.join(__dirname, '.env');
     
     if (fs.existsSync(envPath)) {
         log('✅ .env file already exists', 'green');
         return true;
     }
+    
+    // Use provided ports or defaults
+    const backendPort = ports?.backend || 3000;
+    const frontendPort = ports?.frontend || 3001;
 
     const jwtSecret = generateSecureKey(32);
     const sessionSecret = generateSecureKey(32);
 
     const envContent = `# Auto-generated environment configuration
 NODE_ENV=development
-PORT=3000
-FRONTEND_URL=http://localhost:3001
+PORT=${backendPort}
+FRONTEND_URL=http://localhost:${frontendPort}
 
 # Database Configuration (using default PostgreSQL setup)
 DATABASE_URL=postgresql://postgres:password123@localhost:5432/secure_asset_portal
@@ -496,7 +543,7 @@ RATE_LIMIT_MAX_REQUESTS=100
 AUTH_RATE_LIMIT_MAX=5
 
 # CORS Configuration
-CORS_ORIGIN=http://localhost:3001
+CORS_ORIGIN=http://localhost:${frontendPort}
 CORS_CREDENTIALS=true
 
 # Development Settings
@@ -594,17 +641,20 @@ async function main() {
         process.exit(1);
     }
 
-    // Step 2: Check and configure email if needed
+    // Step 2: Detect optimal ports for development and deployment
+    const ports = await detectOptimalPorts();
+
+    // Step 3: Check and configure email if needed
     const emailConfig = await checkAndConfigureEmail();
 
-    // Step 2.1: Create .env file with email configuration
-    if (!(await createEnvFileWithConfig(emailConfig))) {
+    // Step 4: Create .env file with email configuration and optimal ports
+    if (!(await createEnvFileWithConfig(emailConfig, ports))) {
         rl.close();
         process.exit(1);
     }
 
-    // Step 3: Create frontend files
-    if (!createFrontendFiles()) {
+    // Step 5: Create frontend files with optimal ports
+    if (!createFrontendFiles(ports)) {
         process.exit(1);
     }
 
@@ -625,8 +675,11 @@ async function main() {
         
         // Skip production build - use development mode
         log('\n🎆 Starting in development mode...', 'blue');
-        log('🌎 Frontend will open at http://localhost:3001', 'green');
-        log('🔧 Backend API running at http://localhost:3000', 'green');
+        log(`🌎 Frontend will open at http://localhost:${ports.frontend}`, 'green');
+        log(`🔧 Backend API running at http://localhost:${ports.backend}`, 'green');
+        if (!ports.isStandard) {
+            log('🔍 Non-standard ports detected - perfect for Render deployment!', 'yellow');
+        }
         log('\n✨ Your Secure Asset Portal is ready!', 'bold');
         log('', 'reset');
         rl.close();
