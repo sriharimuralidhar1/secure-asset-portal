@@ -7,6 +7,9 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const path = require('path');
+const fs = require('fs');
+const https = require('https');
+const http = require('http');
 
 // Trust proxy for rate limiting when behind reverse proxy
 app.set('trust proxy', 1);
@@ -210,14 +213,45 @@ const startServer = async () => {
       process.exit(1);
     }
     
-    app.listen(PORT, () => {
+    let server;
+    const protocol = isHttpsEnabled ? 'https' : 'http';
+    const serverUrl = `${protocol}://localhost:${PORT}`;
+    
+    if (isHttpsEnabled) {
+      // Try to load SSL certificates
+      try {
+        const keyPath = process.env.SSL_KEY_PATH || path.join(__dirname, '..', 'certs', 'key.pem');
+        const certPath = process.env.SSL_CERT_PATH || path.join(__dirname, '..', 'certs', 'cert.pem');
+        
+        if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+          throw new Error('SSL certificates not found. Run setup again to generate certificates.');
+        }
+        
+        const privateKey = fs.readFileSync(keyPath, 'utf8');
+        const certificate = fs.readFileSync(certPath, 'utf8');
+        
+        const credentials = { key: privateKey, cert: certificate };
+        server = https.createServer(credentials, app);
+        
+        console.log('🔒 SSL certificates loaded successfully');
+      } catch (sslError) {
+        console.error('❌ SSL setup failed:', sslError.message);
+        console.log('🔄 Falling back to HTTP mode...');
+        server = http.createServer(app);
+      }
+    } else {
+      server = http.createServer(app);
+    }
+    
+    server.listen(PORT, () => {
       console.log(`🚀 Secure Asset Portal running on port ${PORT}`);
       console.log(`🛡️  Security middleware enabled`);
       
       // HTTPS Configuration Status
-      if (isHttpsEnabled) {
+      if (isHttpsEnabled && server instanceof https.Server) {
         console.log(`🔒 HTTPS: Enabled (HSTS: ${hstsConfig ? 'ON' : 'OFF'})`);
-        console.log(`⚠️  Access via: https://localhost:${PORT}`);
+        console.log(`🔐 Access via: https://localhost:${PORT}`);
+        console.log(`✨ SSL certificates: Self-signed for development`);
       } else {
         console.log(`🔓 HTTPS: Disabled (Development mode)`);
         console.log(`🔗 Access via: http://localhost:${PORT}`);

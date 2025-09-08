@@ -173,8 +173,10 @@ JWT_EXPIRES_IN=24h
 BCRYPT_ROUNDS=12
 SESSION_SECRET=${sessionSecret}
 
-# HTTPS Configuration (disabled by default for development)
-ENABLE_HTTPS=false
+# HTTPS Configuration (enabled for production with generated certificates)
+ENABLE_HTTPS=true
+SSL_KEY_PATH=./certs/key.pem
+SSL_CERT_PATH=./certs/cert.pem
 HSTS_MAX_AGE=31536000
 HSTS_INCLUDE_SUBDOMAINS=false
 HSTS_PRELOAD=false
@@ -350,6 +352,53 @@ REACT_APP_API_URL=http://localhost:3000/api
     return true;
 }
 
+function generateSSLCertificates() {
+    log('🔒 Generating SSL certificates...', 'blue');
+    
+    const certsDir = path.join(__dirname, 'certs');
+    
+    // Create certs directory if it doesn't exist
+    if (!fs.existsSync(certsDir)) {
+        try {
+            fs.mkdirSync(certsDir, { recursive: true });
+            log('✅ Created certs directory', 'green');
+        } catch (error) {
+            log(`❌ Failed to create certs directory: ${error.message}`, 'red');
+            return false;
+        }
+    }
+    
+    const keyPath = path.join(certsDir, 'key.pem');
+    const certPath = path.join(certsDir, 'cert.pem');
+    
+    // Check if certificates already exist
+    if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+        log('✅ SSL certificates already exist', 'green');
+        return true;
+    }
+    
+    try {
+        // Generate private key and self-signed certificate
+        const certCommand = `openssl req -x509 -newkey rsa:4096 -keyout "${keyPath}" -out "${certPath}" -days 365 -nodes -subj "/C=US/ST=CA/L=San Francisco/O=Secure Asset Portal/OU=Development/CN=localhost"`;
+        
+        log('🔍 Generating SSL certificate for localhost...', 'blue');
+        execSync(certCommand, { stdio: 'pipe' });
+        
+        log('✅ SSL certificates generated successfully', 'green');
+        log(`🔑 Private key: ${keyPath}`, 'reset');
+        log(`📜 Certificate: ${certPath}`, 'reset');
+        
+        return true;
+    } catch (error) {
+        log(`❌ Failed to generate SSL certificates: ${error.message}`, 'red');
+        log('⚠️  Make sure OpenSSL is installed:', 'yellow');
+        log('   macOS: brew install openssl');
+        log('   Ubuntu: sudo apt-get install openssl');
+        log('   Windows: Download from https://www.openssl.org/');
+        return false;
+    }
+}
+
 function setupDatabase() {
     log('🗄️  Setting up database...', 'blue');
     
@@ -438,7 +487,10 @@ async function main() {
         process.exit(1);
     }
 
-    // Step 4: Setup database
+    // Step 4: Generate SSL certificates for production HTTPS
+    const sslSuccess = generateSSLCertificates();
+    
+    // Step 5: Setup database
     const dbSuccess = setupDatabase();
 
     log('\n🎉 Setup completed!', 'bold');
@@ -471,7 +523,12 @@ async function main() {
         
         // Start production server
         log('\n🎆 Starting production server...', 'blue');
-        log('🌎 Opening browser at http://localhost:3000', 'green');
+        
+        const serverUrl = sslSuccess ? 'https://localhost:3000' : 'http://localhost:3000';
+        const protocol = sslSuccess ? 'HTTPS' : 'HTTP';
+        
+        log(`🌎 Opening browser at ${serverUrl}`, 'green');
+        log(`🔒 Protocol: ${protocol} ${sslSuccess ? '(SSL certificates generated)' : '(No SSL)'}`, 'blue');
         log('\n✨ Your Secure Asset Portal is ready!', 'bold');
         log('', 'reset');
         rl.close();
@@ -479,9 +536,9 @@ async function main() {
         // Open browser after a delay
         setTimeout(() => {
             try {
-                require('child_process').exec('open http://localhost:3000');
+                require('child_process').exec(`open ${serverUrl}`);
             } catch (error) {
-                log('⚠️  Could not auto-open browser. Please visit: http://localhost:3000', 'yellow');
+                log(`⚠️  Could not auto-open browser. Please visit: ${serverUrl}`, 'yellow');
             }
         }, 3000);
         
