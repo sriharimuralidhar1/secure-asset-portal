@@ -16,6 +16,7 @@
     "build": "npm run build:backend && npm run build:frontend",
     "build:backend": "cd backend && npm run build",
     "build:frontend": "cd frontend && npm run build",
+    "start:prod": "npm run build && echo '\n🚀 Starting production server...' && echo '\n📱 Opening browser at http://localhost:3000\n' && (sleep 3 && open http://localhost:3000) & NODE_ENV=production npm run start:backend",
     "test": "npm run test:backend && npm run test:frontend",
     "test:backend": "cd backend && npm test",
     "test:frontend": "cd frontend && npm test",
