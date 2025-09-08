@@ -139,40 +139,7 @@ async function configureEmail() {
     };
 }
 
-function updateEnvForHTTPS(sslSuccess) {
-    const envPath = path.join(__dirname, '.env');
-    
-    if (fs.existsSync(envPath) && sslSuccess) {
-        log('✅ Updating .env file with HTTPS configuration...', 'blue');
-        
-        try {
-            let envContent = fs.readFileSync(envPath, 'utf8');
-            
-            // Update or add HTTPS settings
-            if (envContent.includes('ENABLE_HTTPS=')) {
-                envContent = envContent.replace(/ENABLE_HTTPS=.*/g, 'ENABLE_HTTPS=true');
-            } else {
-                envContent += '\nENABLE_HTTPS=true';
-            }
-            
-            if (!envContent.includes('SSL_KEY_PATH=')) {
-                envContent += '\nSSL_KEY_PATH=../certs/key.pem';
-            }
-            
-            if (!envContent.includes('SSL_CERT_PATH=')) {
-                envContent += '\nSSL_CERT_PATH=../certs/cert.pem';
-            }
-            
-            fs.writeFileSync(envPath, envContent);
-            log('✅ Updated .env file with HTTPS configuration', 'green');
-            return true;
-        } catch (error) {
-            log(`❌ Failed to update .env file: ${error.message}`, 'red');
-            return false;
-        }
-    }
-    return true;
-}
+// HTTPS configuration removed for simple development setup
 
 async function createEnvFile() {
     const envPath = path.join(__dirname, '.env');
@@ -208,13 +175,9 @@ JWT_EXPIRES_IN=24h
 BCRYPT_ROUNDS=12
 SESSION_SECRET=${sessionSecret}
 
-# HTTPS Configuration (enabled for production with generated certificates)
-ENABLE_HTTPS=true
-SSL_KEY_PATH=../certs/key.pem
-SSL_CERT_PATH=../certs/cert.pem
-HSTS_MAX_AGE=31536000
-HSTS_INCLUDE_SUBDOMAINS=false
-HSTS_PRELOAD=false
+# WebAuthn Configuration (development)
+WEBAUTHN_RP_ID=localhost
+WEBAUTHN_RP_NAME=Secure Asset Portal
 
 # Application Configuration
 APP_NAME=${emailConfig.APP_NAME}
@@ -387,52 +350,7 @@ REACT_APP_API_URL=http://localhost:3000/api
     return true;
 }
 
-function generateSSLCertificates() {
-    log('🔒 Generating SSL certificates...', 'blue');
-    
-    const certsDir = path.join(__dirname, 'certs');
-    
-    // Create certs directory if it doesn't exist
-    if (!fs.existsSync(certsDir)) {
-        try {
-            fs.mkdirSync(certsDir, { recursive: true });
-            log('✅ Created certs directory', 'green');
-        } catch (error) {
-            log(`❌ Failed to create certs directory: ${error.message}`, 'red');
-            return false;
-        }
-    }
-    
-    const keyPath = path.join(certsDir, 'key.pem');
-    const certPath = path.join(certsDir, 'cert.pem');
-    
-    // Check if certificates already exist
-    if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-        log('✅ SSL certificates already exist', 'green');
-        return true;
-    }
-    
-    try {
-        // Generate private key and self-signed certificate
-        const certCommand = `openssl req -x509 -newkey rsa:4096 -keyout "${keyPath}" -out "${certPath}" -days 365 -nodes -subj "/C=US/ST=CA/L=San Francisco/O=Secure Asset Portal/OU=Development/CN=localhost"`;
-        
-        log('🔍 Generating SSL certificate for localhost...', 'blue');
-        execSync(certCommand, { stdio: 'pipe' });
-        
-        log('✅ SSL certificates generated successfully', 'green');
-        log(`🔑 Private key: ${keyPath}`, 'reset');
-        log(`📜 Certificate: ${certPath}`, 'reset');
-        
-        return true;
-    } catch (error) {
-        log(`❌ Failed to generate SSL certificates: ${error.message}`, 'red');
-        log('⚠️  Make sure OpenSSL is installed:', 'yellow');
-        log('   macOS: brew install openssl');
-        log('   Ubuntu: sudo apt-get install openssl');
-        log('   Windows: Download from https://www.openssl.org/');
-        return false;
-    }
-}
+// SSL certificates removed - using simple HTTP development setup
 
 function setupDatabase() {
     log('🗄️  Setting up database...', 'blue');
@@ -522,11 +440,7 @@ async function main() {
         process.exit(1);
     }
 
-    // Step 4: Generate SSL certificates for production HTTPS
-    const sslSuccess = generateSSLCertificates();
-    
-    // Step 4.1: Update .env file with HTTPS settings
-    updateEnvForHTTPS(sslSuccess);
+    // HTTPS setup removed - using simple development mode
     
     // Step 5: Setup database
     const dbSuccess = setupDatabase();
@@ -541,48 +455,16 @@ async function main() {
         // Step 5: Build and start the application
         log('\n🚀 Building and starting the application...', 'blue');
         
-        if (!runCommand('npm run build', 'Building production version')) {
-            log('⚠️  Build failed, starting in development mode instead', 'yellow');
-            // Start development mode
-            log('\n🎆 Starting in development mode...', 'blue');
-            log('🌎 Opening browser at http://localhost:3001', 'green');
-            log('\n✨ Your Secure Asset Portal is ready!', 'bold');
-            log('', 'reset');
-            rl.close();
-            
-            // Start dev server (this will keep running)
-            require('child_process').spawn('npm', ['run', 'dev'], {
-                stdio: 'inherit',
-                shell: true,
-                detached: false
-            });
-            return;
-        }
-        
-        // Start production server
-        log('\n🎆 Starting production server...', 'blue');
-        
-        const serverUrl = sslSuccess ? 'https://localhost:3000' : 'http://localhost:3000';
-        const protocol = sslSuccess ? 'HTTPS' : 'HTTP';
-        
-        log(`🌎 Opening browser at ${serverUrl}`, 'green');
-        log(`🔒 Protocol: ${protocol} ${sslSuccess ? '(SSL certificates generated)' : '(No SSL)'}`, 'blue');
+        // Skip production build - use development mode
+        log('\n🎆 Starting in development mode...', 'blue');
+        log('🌎 Frontend will open at http://localhost:3001', 'green');
+        log('🔧 Backend API running at http://localhost:3000', 'green');
         log('\n✨ Your Secure Asset Portal is ready!', 'bold');
         log('', 'reset');
         rl.close();
         
-        // Open browser after a delay
-        setTimeout(() => {
-            try {
-                require('child_process').exec(`open ${serverUrl}`);
-            } catch (error) {
-                log(`⚠️  Could not auto-open browser. Please visit: ${serverUrl}`, 'yellow');
-            }
-        }, 3000);
-        
-        // Start production server (this will keep running)
-        process.env.NODE_ENV = 'production';
-        require('child_process').spawn('npm', ['run', 'start:backend'], {
+        // Start dev server (this will keep running)
+        require('child_process').spawn('npm', ['run', 'dev'], {
             stdio: 'inherit',
             shell: true,
             detached: false
