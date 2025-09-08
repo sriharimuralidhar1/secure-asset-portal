@@ -26,7 +26,7 @@ A simple financial asset tracker with biometric login—because remembering pass
 - Business ownership  
 - Insurance policies  
 
-# 🚀 Quick Start - Secure Asset Portal
+# 🚀 Quick Start:
 
 ## One Command Setup
 
