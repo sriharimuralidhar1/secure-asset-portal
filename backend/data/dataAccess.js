@@ -344,9 +344,9 @@ const findAssets = async (criteria) => {
       id: row.id,
       userId: row.user_id,
       name: row.name,
-      type: row.type,
-      value: parseFloat(row.value),
-      purchaseValue: parseFloat(row.purchase_value || row.value),
+      type: row.asset_type,
+      value: parseFloat(row.current_value),
+      purchaseValue: parseFloat(row.acquisition_cost || row.current_value),
       description: row.description,
       metadata: row.metadata,
       createdAt: row.created_at,
@@ -362,7 +362,7 @@ const addAsset = async (assetData) => {
   try {
     const id = Date.now().toString();
     const queryText = `
-      INSERT INTO assets (id, user_id, name, type, value, purchase_value, description, metadata, created_at, updated_at)
+      INSERT INTO assets (id, user_id, name, asset_type, current_value, acquisition_cost, description, metadata, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
       RETURNING *
     `;
@@ -384,9 +384,9 @@ const addAsset = async (assetData) => {
       id: row.id,
       userId: row.user_id,
       name: row.name,
-      type: row.type,
-      value: parseFloat(row.value),
-      purchaseValue: parseFloat(row.purchase_value),
+      type: row.asset_type,
+      value: parseFloat(row.current_value),
+      purchaseValue: parseFloat(row.acquisition_cost),
       description: row.description,
       metadata: row.metadata,
       createdAt: row.created_at,
@@ -409,15 +409,15 @@ const updateAsset = async (assetId, updates) => {
       params.push(updates.name);
     }
     if (updates.type) {
-      setClause.push(`type = $${paramIndex++}`);
+      setClause.push(`asset_type = $${paramIndex++}`);
       params.push(updates.type);
     }
     if (updates.value !== undefined) {
-      setClause.push(`value = $${paramIndex++}`);
+      setClause.push(`current_value = $${paramIndex++}`);
       params.push(updates.value);
     }
     if (updates.purchaseValue !== undefined) {
-      setClause.push(`purchase_value = $${paramIndex++}`);
+      setClause.push(`acquisition_cost = $${paramIndex++}`);
       params.push(updates.purchaseValue);
     }
     if (updates.description !== undefined) {
@@ -449,9 +449,9 @@ const updateAsset = async (assetId, updates) => {
       id: row.id,
       userId: row.user_id,
       name: row.name,
-      type: row.type,
-      value: parseFloat(row.value),
-      purchaseValue: parseFloat(row.purchase_value),
+      type: row.asset_type,
+      value: parseFloat(row.current_value),
+      purchaseValue: parseFloat(row.acquisition_cost),
       description: row.description,
       metadata: row.metadata,
       createdAt: row.created_at,
