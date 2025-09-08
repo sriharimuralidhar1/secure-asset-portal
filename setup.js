@@ -442,6 +442,79 @@ REACT_APP_API_URL=http://localhost:3000/api
     return true;
 }
 
+// Create .env file with the provided email configuration
+async function createEnvFileWithConfig(emailConfig) {
+    const envPath = path.join(__dirname, '.env');
+    
+    if (fs.existsSync(envPath)) {
+        log('✅ .env file already exists', 'green');
+        return true;
+    }
+
+    const jwtSecret = generateSecureKey(32);
+    const sessionSecret = generateSecureKey(32);
+
+    const envContent = `# Auto-generated environment configuration
+NODE_ENV=development
+PORT=3000
+FRONTEND_URL=http://localhost:3001
+
+# Database Configuration (using default PostgreSQL setup)
+DATABASE_URL=postgresql://postgres:password123@localhost:5432/secure_asset_portal
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=secure_asset_portal
+DB_USER=postgres
+DB_PASSWORD=password123
+DB_SSL=false
+
+# Security Configuration (auto-generated secure keys)
+JWT_SECRET=${jwtSecret}
+JWT_EXPIRES_IN=24h
+BCRYPT_ROUNDS=12
+SESSION_SECRET=${sessionSecret}
+
+# WebAuthn Configuration (development)
+WEBAUTHN_RP_ID=localhost
+WEBAUTHN_RP_NAME=Secure Asset Portal
+
+# Two-Factor Authentication
+TWO_FACTOR_SERVICE_NAME=${emailConfig.APP_NAME}
+TWO_FACTOR_ISSUER=${emailConfig.APP_NAME}
+
+# Email Configuration
+SMTP_HOST=${emailConfig.SMTP_HOST}
+SMTP_PORT=${emailConfig.SMTP_PORT}
+SMTP_SECURE=${emailConfig.SMTP_SECURE}
+SMTP_USER=${emailConfig.SMTP_USER}
+SMTP_PASS=${emailConfig.SMTP_PASS}
+FROM_EMAIL=${emailConfig.FROM_EMAIL}
+
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+AUTH_RATE_LIMIT_MAX=5
+
+# CORS Configuration
+CORS_ORIGIN=http://localhost:3001
+CORS_CREDENTIALS=true
+
+# Development Settings
+LOG_LEVEL=info
+ENABLE_SWAGGER=true
+SWAGGER_PATH=/api-docs
+`;
+
+    try {
+        fs.writeFileSync(envPath, envContent);
+        log('✅ Created .env file with email configuration', 'green');
+        return true;
+    } catch (error) {
+        log(`❌ Failed to create .env file: ${error.message}`, 'red');
+        return false;
+    }
+}
+
 // SSL certificates removed - using simple HTTP development setup
 
 function setupDatabase() {
@@ -523,6 +596,12 @@ async function main() {
 
     // Step 2: Check and configure email if needed
     const emailConfig = await checkAndConfigureEmail();
+
+    // Step 2.1: Create .env file with email configuration
+    if (!(await createEnvFileWithConfig(emailConfig))) {
+        rl.close();
+        process.exit(1);
+    }
 
     // Step 3: Create frontend files
     if (!createFrontendFiles()) {
