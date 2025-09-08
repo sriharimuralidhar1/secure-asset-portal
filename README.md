@@ -33,6 +33,8 @@ A simple financial asset tracker with biometric login—because remembering pass
 Run this single command and you're done:
 
 ```bash
+git clone https://github.com/sriharimuralidhar1/secure-asset-portal.git
+cd secure-asset-portal
 npm run setup
 ```
 
