@@ -220,8 +220,8 @@ const startServer = async () => {
     if (isHttpsEnabled) {
       // Try to load SSL certificates
       try {
-        const keyPath = process.env.SSL_KEY_PATH || path.join(__dirname, '..', 'certs', 'key.pem');
-        const certPath = process.env.SSL_CERT_PATH || path.join(__dirname, '..', 'certs', 'cert.pem');
+        const keyPath = process.env.SSL_KEY_PATH ? path.resolve(__dirname, process.env.SSL_KEY_PATH) : path.join(__dirname, '..', 'certs', 'key.pem');
+        const certPath = process.env.SSL_CERT_PATH ? path.resolve(__dirname, process.env.SSL_CERT_PATH) : path.join(__dirname, '..', 'certs', 'cert.pem');
         
         if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
           throw new Error('SSL certificates not found. Run setup again to generate certificates.');
