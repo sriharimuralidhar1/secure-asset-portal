@@ -1,9 +1,17 @@
 const { Pool } = require('pg');
 
 // Database connection pool
+// Parse DB_SSL environment variable
+let sslConfig = false;
+if (process.env.DB_SSL === 'true') {
+  sslConfig = { rejectUnauthorized: false };
+} else if (process.env.DB_SSL === 'false' || !process.env.DB_SSL) {
+  sslConfig = false;
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://postgres@localhost:5432/secure_asset_portal',
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: sslConfig,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
