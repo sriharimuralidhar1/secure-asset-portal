@@ -549,6 +549,24 @@ router.post('/passkey/register/finish', async (req, res) => {
       twoFactorEnabled: true 
     });
 
+    // If 2FA was just enabled via passkey, send the confirmation email
+    if (!user.twoFactorEnabled) {
+      try {
+        const updatedUser = await findUser(user.id);
+        emailService.send2FAConfirmationEmail(updatedUser)
+          .then(result => {
+            if (result.success) {
+              console.log(`📧 2FA confirmation email (via passkey) sent to ${updatedUser.email}`);
+            }
+          })
+          .catch(err => {
+            console.error('❌ Failed to send 2FA confirmation email (via passkey):', err);
+          });
+      } catch (e) {
+        console.error('❌ Error preparing 2FA confirmation email (via passkey):', e);
+      }
+    }
+
     // Log the registration
     await addAuditLog({
       userId: user.id,
@@ -1182,6 +1200,24 @@ router.post('/passkey/add/finish', async (req, res) => {
       updateData.twoFactorEnabled = true;
     }
     await updateUser(user.id, updateData);
+
+    // If 2FA was just enabled via additional passkey, send the confirmation email
+    if (!user.twoFactorEnabled && updateData.twoFactorEnabled) {
+      try {
+        const updatedUser = await findUser(user.id);
+        emailService.send2FAConfirmationEmail(updatedUser)
+          .then(result => {
+            if (result.success) {
+              console.log(`📧 2FA confirmation email (via additional passkey) sent to ${updatedUser.email}`);
+            }
+          })
+          .catch(err => {
+            console.error('❌ Failed to send 2FA confirmation email (via additional passkey):', err);
+          });
+      } catch (e) {
+        console.error('❌ Error preparing 2FA confirmation email (via additional passkey):', e);
+      }
+    }
 
     // Log the registration
     await addAuditLog({
