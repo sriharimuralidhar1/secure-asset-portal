@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const path = require('path');
 
 // Trust proxy for rate limiting when behind reverse proxy
 app.set('trust proxy', 1);
@@ -75,6 +76,13 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Serve static files from React build (production)
+if (process.env.NODE_ENV === 'production') {
+  const buildPath = path.join(__dirname, '..', 'frontend', 'build');
+  app.use(express.static(buildPath));
+  console.log('📦 Serving static files from:', buildPath);
+}
+
 // API Routes
 app.use('/api/auth', require('./api/auth'));
 app.use('/api/assets', require('./api/assets'));
@@ -128,13 +136,29 @@ app.get('/debug/db-status', async (req, res) => {
   }
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    error: 'Endpoint not found',
-    message: 'The requested resource does not exist'
+// Catch-all handler: serve React app for non-API routes (production)
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    // Don't serve React app for API routes
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({
+        error: 'API endpoint not found',
+        message: 'The requested API resource does not exist'
+      });
+    }
+    
+    const buildPath = path.join(__dirname, '..', 'frontend', 'build', 'index.html');
+    res.sendFile(buildPath);
   });
-});
+} else {
+  // 404 handler for development (API only mode)
+  app.use('*', (req, res) => {
+    res.status(404).json({
+      error: 'Endpoint not found',
+      message: 'The requested resource does not exist'
+    });
+  });
+}
 
 // Global error handler
 app.use((err, req, res, next) => {
