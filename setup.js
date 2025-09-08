@@ -38,10 +38,10 @@ function generateSecureKey(length = 64) {
     return crypto.randomBytes(length).toString('hex');
 }
 
-function runCommand(command, description) {
+function runCommand(command, description, silent = false) {
     try {
         log(`⏳ ${description}...`, 'blue');
-        execSync(command, { stdio: 'inherit' });
+        execSync(command, { stdio: silent ? 'pipe' : 'inherit' });
         log(`✅ ${description} completed`, 'green');
         return true;
     } catch (error) {
@@ -576,21 +576,21 @@ function setupDatabase() {
 async function main() {
     log('🚀 Starting automated setup...', 'bold');
     
-    // Step 1: Install dependencies
-    if (!runCommand('npm install', 'Installing root dependencies')) {
+    // Step 1: Install dependencies (suppress audit warnings for cleaner output)
+    if (!runCommand('npm install --no-audit --silent', 'Installing root dependencies')) {
         process.exit(1);
     }
     
     // Install additional packages needed for scripts at root level
-    if (!runCommand('npm install uuid bcrypt pg dotenv', 'Installing script dependencies at root level')) {
+    if (!runCommand('npm install uuid bcrypt pg dotenv --no-audit --silent', 'Installing script dependencies at root level')) {
         process.exit(1);
     }
     
-    if (!runCommand('npm install --prefix backend', 'Installing backend dependencies')) {
+    if (!runCommand('npm install --prefix backend --no-audit --silent', 'Installing backend dependencies')) {
         process.exit(1);
     }
     
-    if (!runCommand('npm install --prefix frontend', 'Installing frontend dependencies')) {
+    if (!runCommand('npm install --prefix frontend --no-audit --silent', 'Installing frontend dependencies')) {
         process.exit(1);
     }
 
