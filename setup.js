@@ -447,7 +447,52 @@ async function main() {
     if (dbSuccess) {
         log('✅ Everything is ready to go!', 'green');
         log('🎉 Fresh clean database with no test data', 'green');
-        log('🚀 Run: npm run dev', 'blue');
+        
+        // Step 5: Build and start the application
+        log('\n🚀 Building and starting the application...', 'blue');
+        
+        if (!runCommand('npm run build', 'Building production version')) {
+            log('⚠️  Build failed, starting in development mode instead', 'yellow');
+            // Start development mode
+            log('\n🎆 Starting in development mode...', 'blue');
+            log('🌎 Opening browser at http://localhost:3001', 'green');
+            log('\n✨ Your Secure Asset Portal is ready!', 'bold');
+            log('', 'reset');
+            rl.close();
+            
+            // Start dev server (this will keep running)
+            require('child_process').spawn('npm', ['run', 'dev'], {
+                stdio: 'inherit',
+                shell: true,
+                detached: false
+            });
+            return;
+        }
+        
+        // Start production server
+        log('\n🎆 Starting production server...', 'blue');
+        log('🌎 Opening browser at http://localhost:3000', 'green');
+        log('\n✨ Your Secure Asset Portal is ready!', 'bold');
+        log('', 'reset');
+        rl.close();
+        
+        // Open browser after a delay
+        setTimeout(() => {
+            try {
+                require('child_process').exec('open http://localhost:3000');
+            } catch (error) {
+                log('⚠️  Could not auto-open browser. Please visit: http://localhost:3000', 'yellow');
+            }
+        }, 3000);
+        
+        // Start production server (this will keep running)
+        process.env.NODE_ENV = 'production';
+        require('child_process').spawn('npm', ['run', 'start:backend'], {
+            stdio: 'inherit',
+            shell: true,
+            detached: false
+        });
+        
     } else {
         log('⚠️  Setup completed with database warnings', 'yellow');
         log('📝 Manual database setup may be needed:', 'yellow');
@@ -455,15 +500,9 @@ async function main() {
         log('   2. Create database: createdb secure_asset_portal', 'reset');
         log('   3. Run schema: psql -d secure_asset_portal -f database/schema.sql', 'reset');
         log('   4. Then run: npm run dev', 'blue');
+        log('', 'reset');
+        rl.close();
     }
-    
-    log('', 'reset');
-    log('📖 View at: http://localhost:3001', 'blue');
-    log('🔌 API at: http://localhost:3000', 'blue');
-    log('', 'reset');
-    
-    // Close readline interface
-    rl.close();
 }
 
 // Handle errors gracefully

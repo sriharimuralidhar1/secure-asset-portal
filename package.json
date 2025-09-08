@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "setup": "node setup.js",
+    "setup:complete": "node setup.js",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:brave": "concurrently \"npm run dev:backend\" \"npm run dev:frontend:brave\"",
     "dev:backend": "cd backend && npm run dev",
