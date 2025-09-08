@@ -759,6 +759,15 @@ router.post('/passkey/authenticate/finish', async (req, res) => {
         error: 'User not found'
       });
     }
+    
+    // SECURITY: Validate that the passkey belongs to the user with the provided email
+    if (email && user.email !== email) {
+      console.error(`❌ SECURITY VIOLATION: Passkey for ${user.email} used with email ${email}`);
+      return res.status(401).json({
+        error: 'Authentication failed',
+        message: 'This passkey is not authorized for the provided email address'
+      });
+    }
 
     console.log('🔍 Passkey details:');
     console.log('  - ID:', passkey.id);
