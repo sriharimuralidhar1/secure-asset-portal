@@ -408,6 +408,11 @@ async function main() {
         process.exit(1);
     }
     
+    // Install additional packages needed for scripts at root level
+    if (!runCommand('npm install uuid bcrypt pg dotenv', 'Installing script dependencies at root level')) {
+        process.exit(1);
+    }
+    
     if (!runCommand('npm install --prefix backend', 'Installing backend dependencies')) {
         process.exit(1);
     }
