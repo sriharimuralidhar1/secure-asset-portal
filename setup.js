@@ -210,8 +210,8 @@ SESSION_SECRET=${sessionSecret}
 
 # HTTPS Configuration (enabled for production with generated certificates)
 ENABLE_HTTPS=true
-SSL_KEY_PATH=./certs/key.pem
-SSL_CERT_PATH=./certs/cert.pem
+SSL_KEY_PATH=../certs/key.pem
+SSL_CERT_PATH=../certs/cert.pem
 HSTS_MAX_AGE=31536000
 HSTS_INCLUDE_SUBDOMAINS=false
 HSTS_PRELOAD=false
