@@ -139,6 +139,41 @@ async function configureEmail() {
     };
 }
 
+function updateEnvForHTTPS(sslSuccess) {
+    const envPath = path.join(__dirname, '.env');
+    
+    if (fs.existsSync(envPath) && sslSuccess) {
+        log('✅ Updating .env file with HTTPS configuration...', 'blue');
+        
+        try {
+            let envContent = fs.readFileSync(envPath, 'utf8');
+            
+            // Update or add HTTPS settings
+            if (envContent.includes('ENABLE_HTTPS=')) {
+                envContent = envContent.replace(/ENABLE_HTTPS=.*/g, 'ENABLE_HTTPS=true');
+            } else {
+                envContent += '\nENABLE_HTTPS=true';
+            }
+            
+            if (!envContent.includes('SSL_KEY_PATH=')) {
+                envContent += '\nSSL_KEY_PATH=../certs/key.pem';
+            }
+            
+            if (!envContent.includes('SSL_CERT_PATH=')) {
+                envContent += '\nSSL_CERT_PATH=../certs/cert.pem';
+            }
+            
+            fs.writeFileSync(envPath, envContent);
+            log('✅ Updated .env file with HTTPS configuration', 'green');
+            return true;
+        } catch (error) {
+            log(`❌ Failed to update .env file: ${error.message}`, 'red');
+            return false;
+        }
+    }
+    return true;
+}
+
 async function createEnvFile() {
     const envPath = path.join(__dirname, '.env');
     
@@ -489,6 +524,9 @@ async function main() {
 
     // Step 4: Generate SSL certificates for production HTTPS
     const sslSuccess = generateSSLCertificates();
+    
+    // Step 4.1: Update .env file with HTTPS settings
+    updateEnvForHTTPS(sslSuccess);
     
     // Step 5: Setup database
     const dbSuccess = setupDatabase();
