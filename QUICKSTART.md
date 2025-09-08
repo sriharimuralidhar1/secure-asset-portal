@@ -12,10 +12,11 @@ That's it! The script will:
 
 ✅ Install all dependencies  
 ✅ Configure your environment  
+✅ Generate SSL certificates  
 ✅ Set up the database  
 ✅ Build the application  
-✅ Start the server  
-✅ Open your browser automatically  
+✅ Start HTTPS server  
+✅ Open your browser automatically
 
 ## What You'll Need
 
@@ -27,8 +28,9 @@ That's it! The script will:
 
 After setup, your Secure Asset Portal will open automatically at:
 
-- **Production**: `http://localhost:3000` (optimized build)
-- **Or if build fails**: `http://localhost:3001` (development mode)
+- **Production**: `https://localhost:3000` 🔒 (HTTPS with auto-generated SSL certificates)
+- **Fallback**: `http://localhost:3000` (if SSL generation fails)
+- **Dev mode**: `http://localhost:3001` (if build fails)
 
 ## Features Ready to Use
 
