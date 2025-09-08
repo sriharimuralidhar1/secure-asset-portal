@@ -173,6 +173,12 @@ JWT_EXPIRES_IN=24h
 BCRYPT_ROUNDS=12
 SESSION_SECRET=${sessionSecret}
 
+# HTTPS Configuration (disabled by default for development)
+ENABLE_HTTPS=false
+HSTS_MAX_AGE=31536000
+HSTS_INCLUDE_SUBDOMAINS=false
+HSTS_PRELOAD=false
+
 # Application Configuration
 APP_NAME=${emailConfig.APP_NAME}
 FROM_EMAIL=${emailConfig.FROM_EMAIL}

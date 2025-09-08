@@ -11,6 +11,19 @@ const path = require('path');
 // Trust proxy for rate limiting when behind reverse proxy
 app.set('trust proxy', 1);
 
+// Dynamic security configuration based on environment
+// To enable HTTPS in production:
+// 1. Set ENABLE_HTTPS=true in .env
+// 2. Configure your reverse proxy (nginx, Apache) or load balancer for SSL termination
+// 3. Set HSTS_* variables as needed for your domain
+// Note: This app doesn't handle SSL certificates directly - use a reverse proxy
+const isHttpsEnabled = process.env.ENABLE_HTTPS === 'true';
+const hstsConfig = isHttpsEnabled ? {
+  maxAge: parseInt(process.env.HSTS_MAX_AGE) || 31536000, // 1 year default
+  includeSubDomains: process.env.HSTS_INCLUDE_SUBDOMAINS === 'true',
+  preload: process.env.HSTS_PRELOAD === 'true'
+} : false;
+
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: {
@@ -19,13 +32,13 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
+      // Allow HTTP in development, HTTPS in production
+      upgradeInsecureRequests: isHttpsEnabled ? [] : null
     },
   },
-  hsts: {
-    maxAge: 31536000,
-    includeSubDomains: true,
-    preload: true
-  }
+  hsts: hstsConfig,
+  // Only force HTTPS if explicitly enabled
+  forceHTTPS: isHttpsEnabled
 }));
 
 // Rate limiting
@@ -201,12 +214,21 @@ const startServer = async () => {
       console.log(`🚀 Secure Asset Portal running on port ${PORT}`);
       console.log(`🛡️  Security middleware enabled`);
       
+      // HTTPS Configuration Status
+      if (isHttpsEnabled) {
+        console.log(`🔒 HTTPS: Enabled (HSTS: ${hstsConfig ? 'ON' : 'OFF'})`);
+        console.log(`⚠️  Access via: https://localhost:${PORT}`);
+      } else {
+        console.log(`🔓 HTTPS: Disabled (Development mode)`);
+        console.log(`🔗 Access via: http://localhost:${PORT}`);
+      }
+      
       if (process.env.NODE_ENV === 'production') {
-        console.log(`📱 Frontend + API: http://localhost:${PORT}`);
-        console.log(`🔒 Production mode: Static files served from React build`);
+        console.log(`📱 Frontend + API served together`);
+        console.log(`🔒 Production mode: Static files from React build`);
       } else {
         console.log(`🔒 CORS enabled for: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`);
-        console.log(`🔧 Development mode: API only on port ${PORT}`);
+        console.log(`🔧 Development mode: API only`);
       }
       
       console.log(`🗄️  PostgreSQL database connected`);
