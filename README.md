@@ -1,4 +1,5 @@
 # 🛡️ Secure Asset Portal
+<img width="1445" height="814" alt="Screenshot 2025-09-09 at 12 38 27 AM" src="https://github.com/user-attachments/assets/6342b31b-7d28-4529-8341-37c585b519cc" />
 
 A simple financial asset tracker with biometric login—because remembering passwords is annoying and a security risk. Using WARP (https://www.warp.dev/)
 
