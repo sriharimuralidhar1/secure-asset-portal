@@ -1,6 +1,6 @@
 # 🛡️ Secure Asset Portal
 
-A simple financial asset tracker with biometric login—because remembering passwords is annoying. Using WARP (https://www.warp.dev/)
+A simple financial asset tracker with biometric login—because remembering passwords is annoying and a security risk. Using WARP (https://www.warp.dev/)
 
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)  
 [![React](https://img.shields.io/badge/React-18+-blue.svg)](https://reactjs.org/)  
@@ -38,6 +38,10 @@ cd secure-asset-portal
 npm run setup
 ```
 
+Run this command to restart the server without clearing data:
+```bash
+npm run dev
+```
 That's it! The script will:
 
 ✅ Install all dependencies  
