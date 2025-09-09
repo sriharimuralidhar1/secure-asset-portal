@@ -38,10 +38,7 @@ cd secure-asset-portal
 npm run setup
 ```
 
-Run this command to restart the server without clearing data:
-```bash
-npm run dev
-```
+
 That's it! The script will:
 
 ✅ Install all dependencies  
@@ -68,6 +65,11 @@ After setup, your Secure Asset Portal will open automatically at http://localhos
 📊 **Portfolio Reports** and analytics  
 📧 **Email Notifications** (Gmail integration)  
 🔒 **Bank-level Security** with audit trails  
+
+Run this command to restart the server without clearing data:
+```bash
+npm run dev
+```
 
 ---
 
